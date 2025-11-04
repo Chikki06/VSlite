@@ -1,0 +1,320 @@
+"""
+Copyright (C) 2019 NVIDIA Corporation.  All rights reserved.
+Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
+"""
+
+from data.base_dataset import BaseDataset, get_params, get_transform
+from PIL import Image
+import util.util as util
+import os
+import numpy as np
+import torchvision.transforms as transforms
+import random
+from data.AffineT import *
+import spectral
+import tifffile as tif
+import cv2
+import albumentations as A
+from IPython.core.debugger import set_trace
+
+
+class GeoTransform:
+    def __init__(self, transform=None):
+        """
+        Initializes the transformation class.
+        
+        Args:
+            transform (albumentations.Compose): A transformation function to apply the same transformations to all images.
+        """
+        self.transform = transform
+
+    def forward(self, ir, vis, he):
+        """
+        Applies the same transformation to the IR, VIS, and HE images.
+        
+        Args:
+            ir (numpy.ndarray): IR image of shape (W, H, 10).
+            vis (numpy.ndarray): VIS image of shape (W, H, 3).
+            he (numpy.ndarray): HE image of shape (W, H, 3).
+            
+        Returns:
+            tuple: Transformed IR, VIS, and HE images as torch tensors.
+        """
+        # Apply the same transformation to all images
+        if self.transform:
+            augmented = self.transform(image=ir, image0=vis, image1=he)
+            ir = augmented['image']
+            vis = augmented['image0']
+            he = augmented['image1']
+        
+        # Convert to torch tensors
+        ir = torch.tensor(ir, dtype=torch.float32).permute(2, 0, 1)  # (W, H, 10) -> (10, W, H)
+        vis = torch.tensor(vis, dtype=torch.float32).permute(2, 0, 1)  # (W, H, 3) -> (3, W, H)
+        he = torch.tensor(he, dtype=torch.float32).permute(2, 0, 1)  # (W, H, 3) -> (3, W, H)
+        
+        return ir, vis, he
+
+class RGBaug:
+    def __init__(self, 
+                 jitters=False,
+                 noise=True,
+                 blur=True,
+                 defocus=True,
+                 motion=True,
+                 zoom=False,
+                 gamma=True,  # Add gamma augmentation
+                 brightness_max=0.4,
+                 contrast_max=-0.4,
+                 hue_max=20,  # Add hue control
+                 saturation_max=30,  # Add saturation control
+                 value_max=0.4,  # Value control (for brightness)
+                 gamma_limit=(80, 120),  # Default gamma range (0.8 to 1.2)
+                 noise_var_max=0.1,
+                 blur_kernel=(3, 5),
+                 zoom_factor=(1, 1.05),
+                 original_size=(256, 256)):  # Add original size for resizing
+        """
+        Initializes the augmentation class for RGB images.
+        
+        Args:
+            jitters (bool): Whether to apply brightness/contrast jittering and color changes.
+            noise (bool): Whether to apply Gaussian noise.
+            blur (bool): Whether to apply general blurring.
+            defocus (bool): Whether to apply defocus blur.
+            motion (bool): Whether to apply motion blur.
+            zoom (bool): Whether to apply random zoom.
+            gamma (bool): Whether to apply random gamma augmentation.
+            brightness_max (float): Maximum brightness factor for jittering.
+            contrast_max (float): Maximum contrast factor for jittering.
+            hue_max (int): Maximum hue shift for color jittering.
+            saturation_max (int): Maximum saturation change for color jittering.
+            value_max (float): Maximum value (brightness) change for color jittering.
+            gamma_limit (tuple): Range for gamma correction, usually between 0.5 to 1.5 (expressed as percentages here).
+            noise_var_max (float): Maximum variance for Gaussian noise.
+            blur_kernel (tuple): Kernel size for blurring.
+            zoom_factor (tuple): Range for zoom scaling.
+            original_size (tuple): Size to resize the image back to after transformations.
+        """
+        self.original_size = original_size
+        self.transform = self.build_transforms(jitters, noise, blur, defocus, motion, zoom, gamma,
+                                               brightness_max, contrast_max, hue_max, saturation_max, value_max,
+                                               gamma_limit, noise_var_max, blur_kernel, zoom_factor)
+    
+    def build_transforms(self, 
+                         jitters, noise, blur, defocus, motion, zoom, gamma,
+                         brightness_max, contrast_max, hue_max, saturation_max, value_max,
+                         gamma_limit, noise_var_max, blur_kernel, zoom_factor):
+        """
+        Build the transformation pipeline.
+        
+        Args:
+            All args are passed from the constructor to define augmentations.
+        
+        Returns:
+            albumentations.Compose: A composed set of augmentations.
+        """
+        transforms = []
+        
+        # Apply brightness/contrast jittering and color jittering
+        if jitters:
+            transforms.append(A.RandomBrightnessContrast(
+                brightness_limit=brightness_max, contrast_limit=contrast_max, p=.5))
+            transforms.append(A.HueSaturationValue(
+                hue_shift_limit=hue_max, 
+                sat_shift_limit=saturation_max, 
+                val_shift_limit=value_max, p=.5))
+        
+        # Apply gamma correction
+        if gamma:
+            transforms.append(A.RandomGamma(gamma_limit=gamma_limit, p=.5))
+        
+        # Apply Gaussian noise
+        if noise:
+            transforms.append(A.GaussNoise(var_limit=(0, noise_var_max), p=0.5))
+        
+        # Apply blurring
+        if blur:
+            transforms.append(A.Blur(blur_limit=blur_kernel, p=0.5))
+        
+        # Apply defocus blur (use 'radius' instead of 'blur_limit')
+        if defocus:
+            transforms.append(A.Defocus(radius=(1.5, 3), p=0.5))
+        
+        # Apply motion blur
+        if motion:
+            transforms.append(A.MotionBlur(blur_limit=blur_kernel, p=0.5))
+        
+        # Apply zoom
+        if zoom:
+            transforms.append(A.RandomScale(scale_limit=zoom_factor, p=0.5))
+
+        # Ensure that the image is resized back to the original size
+        transforms.append(A.Resize(height=self.original_size[0], width=self.original_size[1]))
+        
+        # Compose all transforms
+        return A.Compose(transforms)
+
+    def forward(self, image):
+        """
+        Apply augmentations to the input RGB image.
+        
+        Args:
+            image (numpy.ndarray): An input RGB image of shape (W, H, 3).
+        
+        Returns:
+            torch.Tensor: Transformed image as a PyTorch tensor of shape (3, W, H).
+        """
+        # Apply the transformations
+      #  if self.transform:
+       #     augmented = self.transform(image=image)
+        #    image = augmented['image']
+        
+        # Convert to torch tensor and permute to (C, W, H)
+      #  image = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1)  # (W, H, 3) -> (3, W, H)
+        
+        return image
+
+
+
+class VSDataset(BaseDataset):
+    @staticmethod
+    def modify_commandline_options(parser, is_train):
+        parser.set_defaults(label_nc=5-1)
+        parser.set_defaults(batch_size=8)
+
+        return parser
+
+    def initialize(self, opt):
+        self.opt = opt
+        #set_trace()
+        self.path_IR = os.path.join(opt.dataroot, 'ir')
+        self.path_VIS = os.path.join(opt.dataroot, 'vis')
+        self.path_HE = os.path.join(opt.dataroot, 'he')
+        self.path_bkg = os.path.join(opt.dataroot, 'bkg')
+        IR = os.listdir(self.path_IR)
+        VIS = os.listdir(self.path_VIS)
+        HE = os.listdir(self.path_HE)
+        BKG = [file for file in os.listdir(self.path_bkg) if file.endswith('.hdr')]
+
+        
+        transform = A.Compose([
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.Transpose(p=0.5)
+        ], additional_targets={'image0': 'image', 'image1': 'image'})
+        
+        self.Allaug =  GeoTransform(transform=transform)
+
+        self.rgb_augmenter = RGBaug(
+            jitters=True,
+            noise=True,
+            blur=True,
+            defocus=True,
+            motion=True,
+            zoom=False,
+            gamma=True,
+            brightness_max=.2,
+            contrast_max=0.2,
+            hue_max=1000,  # Shift hue by max 20 degrees
+            saturation_max=20,  # Increase/decrease saturation by max 30 units
+            value_max=0.9,  # Change brightness by max 0.4
+            gamma_limit=(30, 160),
+            noise_var_max=0.1,
+            blur_kernel=(3, 5),
+            zoom_factor=(1, 1.05))
+
+        IR = IR[: opt.max_dataset_size]
+        VIS = VIS[: opt.max_dataset_size]
+        HE = HE[: opt.max_dataset_size]
+
+        self.list_IR = IR
+        self.list_VIS = VIS
+        self.list_HE = HE
+        self.list_BKG = BKG
+        
+        size = len(self.list_IR)
+        self.dataset_size = size
+
+
+    def __getitem__(self, index):
+        RAND_BKG = random.randint(0, len(self.list_BKG))
+        hdr_path = os.path.join(self.path_bkg,self.list_BKG[RAND_BKG-1])
+        bsq_path = hdr_path.replace(".hdr", ".bsq")
+        bkg = spectral.envi.open(hdr_path, bsq_path)
+        # This is for making pixels 0.69. Then extracting 1024x1024 region
+        x1 = np.random.randint(0, 147)
+        y1 = np.random.randint(0, 147)
+        bkg = bkg[x1:x1 + 354, y1:y1 + 354, :]
+        
+     
+        I_name = os.path.join(self.path_IR,self.list_IR[index%len(self.list_IR)])
+        img = np.load(I_name)
+      #  img = np.transpose(img, (2, 0, 1))
+        ir_data = img[:, :, :]
+        bkg = bkg[:ir_data.shape[0],:ir_data.shape[1],:]
+        
+        ir_data[ir_data>6] = 6
+        ir_data[ir_data<0] = 0
+#         img = ir_data/2
+        rand = np.random.uniform(0.75, 2.5)
+        img = ir_data / rand
+      #  print(ir_data.shape[-1])
+        for i in range(ir_data.shape[-1]):
+            band_mean = np.mean(ir_data[..., i])
+            band_std = np.std(ir_data[..., i])
+            mean_variation = np.random.uniform(-0.05, 0.05) * band_mean
+            scale_factor = np.random.uniform(0, 1) * band_mean * .2
+            noise = np.random.normal(loc=mean_variation, scale=scale_factor, size=ir_data[..., i].shape)
+            img[..., i] += noise   
+        img += bkg   
+        target_size = (1024, 1024)
+#         bkg_upsampled = np.zeros((target_size[1], target_size[0], bkg.shape[2]), dtype=bkg.dtype)
+
+#         for channel in range(img.shape[2]):
+#             bkg_upsampled[:, :, channel] = cv2.resize(bkg[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+            
+        img_upsampled = np.zeros((target_size[1], target_size[0], img.shape[2]), dtype=img.dtype)
+
+        for channel in range(img.shape[2]):
+            img_upsampled[:, :, channel] = cv2.resize(img[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+
+            
+            
+        V_name = os.path.join(self.path_VIS,self.list_VIS[index%len(self.list_VIS)])
+
+        img_V = np.load(V_name)#/256
+       # img_V = np.transpose(img_V, (2, 0, 1))
+
+        img_V = self.rgb_augmenter.forward(img_V)/256  
+       # print(img_upsampled.shape)
+        H_name = os.path.join(self.path_HE,self.list_HE[index%len(self.list_HE)])
+
+        img_H = np.load(H_name)#/256
+        img_upsampled, img_V, img_H= self.Allaug.forward(img_upsampled,img_V,img_H)
+        img_H = img_H/256
+        img_H[img_H>1] = 1
+        img_H[img_H<0] = 0
+        img_H = (img_H - .5)/.5
+
+
+       
+        trans1 = transforms.ToTensor()
+ 
+
+
+
+        combined_data = img_upsampled
+
+       # combined_data = ((torch.from_numpy(combined_data).float()) - 0)/1
+
+        name = self.list_IR[index%len(self.list_IR)];
+        
+        
+        img_T = img_H
+
+        return {'input': combined_data[:,:,:], 'target': img_T, 'name': name}
+
+
+
+    def __len__(self):
+        return self.dataset_size
