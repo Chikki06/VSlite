@@ -470,8 +470,7 @@ class AttGenerator_ResNet50_SkipCon(nn.Module):
             setattr(self, 'cbam_'+str(i), CBAM(self.ngf * mult))
         setattr(self, 'cbam_'+str(self.n_downsampling-1), CBAM(self.ngf))
         
-        self.final_upsample = nn.Sequential(nn.ConvTranspose2d(
-            self.ngf, self.ngf // 2, kernel_size=3, stride=2, padding=1, output_padding=1), 
+        self.final_upsample = nn.Sequential(nn.ConvTranspose2d(self.ngf, self.ngf // 2, kernel_size=3, stride=2, padding=1, output_padding=1), 
             norm_layer(self.ngf // 2), nn.ReLU(True), nn.ReflectionPad2d(3), 
             nn.Conv2d(self.ngf // 2, self.output_nc, kernel_size=7, padding=0), nn.Tanh())
             

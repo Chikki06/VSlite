@@ -15,7 +15,10 @@ import spectral
 import tifffile as tif
 import cv2
 import albumentations as A
-from IPython.core.debugger import set_trace
+# from IPython.core.debugger import set_trace
+# import sys
+
+# sys.stdout = sys.stderr
 
 
 class GeoTransform:
@@ -186,24 +189,25 @@ class VSDataset(BaseDataset):
 
     def initialize(self, opt):
         self.opt = opt
-        #set_trace()
-        self.path_IR = os.path.join(opt.dataroot, 'ir')
-        self.path_VIS = os.path.join(opt.dataroot, 'vis')
-        self.path_HE = os.path.join(opt.dataroot, 'he')
-        self.path_bkg = os.path.join(opt.dataroot, 'bkg')
-        IR = os.listdir(self.path_IR)
-        VIS = os.listdir(self.path_VIS)
-        HE = os.listdir(self.path_HE)
-        BKG = [file for file in os.listdir(self.path_bkg) if file.endswith('.hdr')]
+        ir_file_list = os.path.join(opt.dataroot, "ir_file_list.txt")
 
-        
+        with open(ir_file_list, "r") as f:
+            IR = [line.strip() for line in f.readlines()]
+
+        VIS = [x.replace("/ir/", "/vis/") for x in IR]
+        HE = [x.replace("/ir/", "/he/") for x in IR]
+
+        IR = IR[: opt.max_dataset_size]
+        VIS = VIS[: opt.max_dataset_size]
+        HE = HE[: opt.max_dataset_size]
+
         transform = A.Compose([
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
             A.Transpose(p=0.5)
         ], additional_targets={'image0': 'image', 'image1': 'image'})
-        
-        self.Allaug =  GeoTransform(transform=transform)
+
+        self.Allaug = GeoTransform(transform=transform)
 
         self.rgb_augmenter = RGBaug(
             jitters=True,
@@ -215,97 +219,77 @@ class VSDataset(BaseDataset):
             gamma=True,
             brightness_max=.2,
             contrast_max=0.2,
-            hue_max=1000,  # Shift hue by max 20 degrees
-            saturation_max=20,  # Increase/decrease saturation by max 30 units
-            value_max=0.9,  # Change brightness by max 0.4
+            hue_max=1000,
+            saturation_max=20,
+            value_max=0.9,
             gamma_limit=(30, 160),
             noise_var_max=0.1,
             blur_kernel=(3, 5),
             zoom_factor=(1, 1.05))
 
-        IR = IR[: opt.max_dataset_size]
-        VIS = VIS[: opt.max_dataset_size]
-        HE = HE[: opt.max_dataset_size]
-
         self.list_IR = IR
         self.list_VIS = VIS
         self.list_HE = HE
-        self.list_BKG = BKG
-        
+
         size = len(self.list_IR)
         self.dataset_size = size
 
 
     def __getitem__(self, index):
-        RAND_BKG = random.randint(0, len(self.list_BKG))
-        hdr_path = os.path.join(self.path_bkg,self.list_BKG[RAND_BKG-1])
-        bsq_path = hdr_path.replace(".hdr", ".bsq")
-        bkg = spectral.envi.open(hdr_path, bsq_path)
-        # This is for making pixels 0.69. Then extracting 1024x1024 region
-        x1 = np.random.randint(0, 147)
-        y1 = np.random.randint(0, 147)
-        bkg = bkg[x1:x1 + 354, y1:y1 + 354, :]
         
-     
-        I_name = os.path.join(self.path_IR,self.list_IR[index%len(self.list_IR)])
-        img = np.load(I_name)
-      #  img = np.transpose(img, (2, 0, 1))
-        ir_data = img[:, :, :]
-        bkg = bkg[:ir_data.shape[0],:ir_data.shape[1],:]
-        
-        ir_data[ir_data>6] = 6
-        ir_data[ir_data<0] = 0
-#         img = ir_data/2
-        rand = np.random.uniform(0.75, 2.5)
-        img = ir_data / rand
-      #  print(ir_data.shape[-1])
-        for i in range(ir_data.shape[-1]):
-            band_mean = np.mean(ir_data[..., i])
-            band_std = np.std(ir_data[..., i])
-            mean_variation = np.random.uniform(-0.05, 0.05) * band_mean
-            scale_factor = np.random.uniform(0, 1) * band_mean * .2
-            noise = np.random.normal(loc=mean_variation, scale=scale_factor, size=ir_data[..., i].shape)
-            img[..., i] += noise   
-        img += bkg   
-        target_size = (1024, 1024)
-#         bkg_upsampled = np.zeros((target_size[1], target_size[0], bkg.shape[2]), dtype=bkg.dtype)
-
-#         for channel in range(img.shape[2]):
-#             bkg_upsampled[:, :, channel] = cv2.resize(bkg[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+        try:
             
-        img_upsampled = np.zeros((target_size[1], target_size[0], img.shape[2]), dtype=img.dtype)
-
-        for channel in range(img.shape[2]):
-            img_upsampled[:, :, channel] = cv2.resize(img[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
-
-            
-            
-        V_name = os.path.join(self.path_VIS,self.list_VIS[index%len(self.list_VIS)])
-
-        img_V = np.load(V_name)#/256
-       # img_V = np.transpose(img_V, (2, 0, 1))
-
-        img_V = self.rgb_augmenter.forward(img_V)/256  
-       # print(img_upsampled.shape)
-        H_name = os.path.join(self.path_HE,self.list_HE[index%len(self.list_HE)])
-
-        img_H = np.load(H_name)#/256
-        img_upsampled, img_V, img_H= self.Allaug.forward(img_upsampled,img_V,img_H)
-        img_H = img_H/256
-        img_H[img_H>1] = 1
-        img_H[img_H<0] = 0
-        img_H = (img_H - .5)/.5
+            I_name = os.path.join(self.list_IR[index%len(self.list_IR)])
+            img = np.load(I_name)
+          #  img = np.transpose(img, (2, 0, 1))
+            ir_data = img[:, :, :]
 
 
-       
-        trans1 = transforms.ToTensor()
- 
+            ir_data[ir_data>5] = 5
+            ir_data[ir_data<0] = 0
+            img = ir_data/1
+
+            target_size = (1024, 1024)
+
+            img_upsampled = np.zeros((target_size[1], target_size[0], img.shape[2]), dtype=img.dtype)
+
+            for channel in range(img.shape[2]):
+                img_upsampled[:, :, channel] = cv2.resize(img[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
 
 
 
-        combined_data = img_upsampled
+            V_name = os.path.join(self.list_VIS[index%len(self.list_VIS)])
+            img_V = np.load(V_name)#/256
+            img_V_upsampled = np.zeros((target_size[1], target_size[0], img_V.shape[2]), dtype=img_V.dtype)
 
-       # combined_data = ((torch.from_numpy(combined_data).float()) - 0)/1
+            for channel in range(img_V.shape[2]):
+                img_V_upsampled[:, :, channel] = cv2.resize(img_V[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+           # img_V = np.transpose(img_V, (2, 0, 1))
+
+            img_V = self.rgb_augmenter.forward(img_V_upsampled)/256  
+           # print(img_upsampled.shape)
+            H_name = os.path.join(self.list_HE[index%len(self.list_HE)])
+            img_H = np.load(H_name)#/256
+            img_H_upsampled = np.zeros((target_size[1], target_size[0], img_H.shape[2]), dtype=img_H.dtype)
+            for channel in range(img_H.shape[2]):
+                img_H_upsampled[:, :, channel] = cv2.resize(img_H[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+            img_upsampled, img_V, img_H= self.Allaug.forward(img_upsampled,img_V,img_H_upsampled)
+            img_H = img_H/256
+            img_H[img_H>1] = 1
+            img_H[img_H<0] = 0
+            img_H = (img_H - .5)/.5
+
+
+
+            trans1 = transforms.ToTensor()
+
+
+        except Exception as e:
+            return self.__getitem__((index + 1) % len(self.list_IR))
+
+        combined_data = np.concatenate([img_upsampled, img_V], axis=0)
+
+        combined_data = ((torch.from_numpy(combined_data).float()) - 0)/1
 
         name = self.list_IR[index%len(self.list_IR)];
         
@@ -318,3 +302,8 @@ class VSDataset(BaseDataset):
 
     def __len__(self):
         return self.dataset_size
+
+
+
+
+

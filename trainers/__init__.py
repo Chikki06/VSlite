@@ -5,16 +5,13 @@ Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses
 
 from .pix2pix_trainer import Pix2PixTrainer
 from .contrastive_pix2pix_trainer import ContrastivePix2PixTrainer
-from .contrastive_pix2pix_MP_trainer import ContrastivePix2PixTrainerMP
 
 
 def get_trainer(opt):
     # if opt.model == 'contrastive_pix2pix':
-    if 'contrastive_pix2pix_MP' in opt.model:
-        return ContrastivePix2PixTrainerMP(opt)
+    if 'contrastive_pix2pix' in opt.model:
+        return ContrastivePix2PixTrainer(opt)
     elif opt.model == 'pix2pix':
         return Pix2PixTrainer(opt)
-    elif opt.model == 'contrastive_pix2pix':
-        return ContrastivePix2PixTrainer(opt)
     else:
         raise ValueError('Unrecognized model/trainer')

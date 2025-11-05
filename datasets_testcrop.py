@@ -41,9 +41,9 @@ class ImageDataset(Dataset):
         #    ir_data[i,:] = ir_data[i,:,:]/(ir_data[-1,:,:]+1e-8)
         #ir_data = ir_data[:-2,:,:]
         
-        ir_data[ir_data>5] = 5
+        ir_data[ir_data>2] = 2
         ir_data[ir_data<0] = 0
-        img = ir_data/1
+        img = ir_data/2
         V_name = os.path.join(self.filesV,self.list_I[index%len(self.list_V)])
         #img = Image.open(I_name)
 #        img_T = Image.open(T_name)
@@ -151,16 +151,13 @@ class ImageDataset_biopsies(Dataset):
         self.parent = root
         self.filesI = os.path.join(self.parent,"IR")
         self.list_I = os.listdir(self.filesI)
+#168B1, 375C1, 468A1_A, 468A1_B, 508B2_B, 637C1, 844A1_A, 844A1_B
+        
 
-        image_dir = 'D:/VSlite/datasets/ImagesT'
-        tif_files = [os.path.splitext(file)[0] for file in os.listdir(image_dir) if file.endswith('.tif')]
-        self.list_I = [file for file in self.list_I if file not in tif_files]
-        #self.list_I = [item for item in os.listdir(self.filesI) if "5419-4" in item ]
         
     def __getitem__(self, index):
 
         FILE = os.listdir(self.parent + '/IR/' + self.list_I[index] +'/')
-        print(self.list_I[index] )
         hdr_file = [f for f in FILE if f.endswith('.hdr')][0]
         bsq_file = hdr_file.replace(".hdr", ".bsq")
        
@@ -179,9 +176,9 @@ class ImageDataset_biopsies(Dataset):
         #mask_ir[:,:,0] = 1 - temp
         #mask_ir[:,:,1] = 1 - temp
         #set_trace()
-        img[img>5] = 5
-        img[img<-5] = -5
-        img = img/1
+        img[img>2] = 2
+        img[img<0] = 0
+        img = img/2
         
 
 
@@ -195,9 +192,9 @@ class ImageDataset_biopsies(Dataset):
         img_V = np.transpose(img_V, (2, 0, 1))
         img = torch.from_numpy(img).float()
         img_V = torch.from_numpy(img_V).float()
-        img_V[img_V>1] = 1
-        img_V[img_V<0] = 0
-   
+        #img_V[img_V>1] = 1
+        #img_V[img_V<0] = 0
+        #img_V = (img_V - .5)/.5
 
    
 

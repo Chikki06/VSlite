@@ -14,7 +14,6 @@ from options.train_options import TrainOptions
 from trainers import get_trainer
 from util.iter_counter import IterationCounter
 from util.visualizer import Visualizer
-from IPython.core.debugger import set_trace
 import os
 os.environ["WANDB_MODE"] = "dryrun"
 

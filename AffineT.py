@@ -21,7 +21,6 @@ Included:
 import math
 import random
 import torch
-from IPython.core.debugger import set_trace
 
 # necessary now, but should eventually not be
 import scipy.ndimage as ndi

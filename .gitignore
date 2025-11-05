@@ -1,0 +1,5 @@
+*.pyc
+*.png
+*.jpg
+__pycache__/
+tcga_tl_checkpoints/

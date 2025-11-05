@@ -248,14 +248,13 @@ def get_norm_layer(norm_type='instance'):
     else:
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
-    
 class AttUnetGenerator(BaseNetwork):
     def __init__(self, opt, norm_layer=nn.BatchNorm2d, fpn_feature='decoder'):
         super(AttUnetGenerator, self).__init__()        
 
         backbone = resnet50(pretrained=True)
         
-        new_conv1 = nn.Conv2d(10, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        new_conv1 = nn.Conv2d(13, 64, kernel_size=7, stride=2, padding=3, bias=False)
         backbone.conv1 = new_conv1
         self.encoder = IntermediateLayerGetter(backbone, return_layers={"conv1": 'feat', "layer1": 'feat0', "layer2": 'feat1', "layer3": 'feat2', "layer4": 'feat3'})
 

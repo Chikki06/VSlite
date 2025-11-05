@@ -1,3 +1,23 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jan 13 22:24:24 2021
+
+@author: kf4
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec  1 12:05:11 2020
+
+@author: kf4
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 24 13:30:47 2019
+
+@author: kf4
+"""
 import argparse
 import os
 import numpy as np
@@ -17,7 +37,6 @@ import tifffile
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torch.autograd import Variable
-import time
 
 #from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
@@ -27,9 +46,6 @@ from DRB import *
 
 from datasets_testcrop import *
 from IPython.core.debugger import set_trace
-
-
-
 
 
 class CrossEntropyLoss2d(nn.Module):
@@ -81,10 +97,9 @@ def main():
   # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
  # model = nn.DataParallel(model)
 
-
-        netG.load_state_dict(torch.load('saved_models/15_net_G.pth'))
-        netG = nn.DataParallel(netG)
+        #netG = nn.DataParallel(netG)
         netG.to(device)
+        netG.load_state_dict(torch.load('checkpoints/VS_contrastive_pix2pix/'+'40_net_G.pth'))
         torch.set_grad_enabled(False)
         torch.cuda._lazy_init()
         netG = netG.eval() 
@@ -107,28 +122,24 @@ def main():
     loss_DB = Tensor(1)
     loss_DSA = Tensor(1)
     loss_DSB = Tensor(1)
-    BATCH_SIZE = 2
+    BATCH_SIZE = 10
     dataloader = DataLoader(ImageDataset_biopsies("../../../Sections/"),
                             batch_size=opt.batch_size, shuffle=False, num_workers=opt.n_cpu)
     for i, batch in enumerate(dataloader):
-        
-        total_time = 0
-        num_iterations = 0
-        ir = ((batch['ir'].type(Tensor2))-0)/1
-        vis = ((batch['vis'].type(Tensor2))-0)/1
+
+        ir = ((batch['ir'].type(Tensor2))-.5)/.5
+        vis = ((batch['vis'].type(Tensor2))-.5)/.5
         name = (batch['name'][0])
 
         fact = 1024
         scaling_factor = (0.69/2)
         _,bands,_,_ = ir.shape
-        b,_,_,_ = ir.shape
-        _,_,r,c = ir.shape
-        r=int(r/scaling_factor+1)
-        c=int(c/scaling_factor+1)
+        b,_,_,_ = vis.shape
+        _,_,r,c = vis.shape
         rn = np.ceil(r/fact)
         cn = np.ceil(c/fact)
         DATA = torch.zeros(BATCH_SIZE, 13, fact, fact)  # Change based on your channel dimension
-        
+
         fhr = torch.zeros(b, 3, int(rn)*fact+1, int(cn)*fact+1).data.cpu().numpy()
 
         if count>=0:
@@ -157,17 +168,10 @@ def main():
                         patch_count += 1
 
                         if patch_count == BATCH_SIZE:  # Process the batch
-                            start_time = time.time()
-                            
                             output = netG(DATA[:patch_count].type(Tensor)).squeeze().data.cpu().numpy() * 0.5 + 0.5
-                            total_time += (time.time() - start_time)
-                            num_iterations += 1
                             #set_trace()
-                            
                             for idx, (pi, pj) in enumerate(patches):
-                                
                                 fhr[kk, :, int(I[pi]):int(I[pi+1]), int(J[pj]):int(J[pj+1])] = output[idx]
-
                             patch_count = 0
                             patches = []
 
@@ -186,10 +190,7 @@ def main():
 #         fhr.save(aa)
 #         he = 0
 #         fhr = 0
-        average_time_per_operation = total_time / num_iterations if num_iterations > 0 else 0
-        print(f"Average time per operation: {average_time_per_operation} seconds")
-        fhr = np.uint8(np.transpose(fhr, (0, 2,3,1))*255)
-        #set_trace()
+        fhr = np.uint8(np.transpose(fhr, (0, 2,3,1))*256)
         fhr = fhr[0,:r,:c,:]
         aa = 'imagesT/'+name+'.tif'
         pyramid_levels = [fhr]
