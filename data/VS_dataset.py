@@ -9,6 +9,7 @@ import util.util as util
 import os
 import numpy as np
 import torchvision.transforms as transforms
+import torch
 import random
 from data.AffineT import *
 import spectral
@@ -189,11 +190,34 @@ class VSDataset(BaseDataset):
 
     def initialize(self, opt):
         self.opt = opt
-        ir_file_list = os.path.join(opt.dataroot, "ir_file_list.txt")
+        
+        # Try different possible IR directory paths
+        possible_ir_dirs = [
+            os.path.join(opt.dataroot, "ir"),  # Direct ir folder in dataroot
+            os.path.join(opt.dataroot, "data_same_batch_final_1024", "ir"),  # Nested structure
+            os.path.join("dataset", "data_same_batch_final_1024", "ir"),  # Local dataset folder
+            os.path.join("/mnt/VSlite/dataset", "data_same_batch_final_1024", "ir")  # Absolute local path
+        ]
+        
+        ir_dir = None
+        for possible_dir in possible_ir_dirs:
+            if os.path.exists(possible_dir):
+                ir_dir = possible_dir
+                break
+        
+        if ir_dir is None:
+            raise ValueError(f"IR directory not found. Tried paths: {possible_ir_dirs}")
+        
+        print(f"Using IR directory: {ir_dir}")
+        
+        # Get all .npy files from the IR directory
+        ir_files = [f for f in os.listdir(ir_dir) if f.endswith('.npy')]
+        ir_files.sort()  # Sort for consistency
+        
+        # Create full paths for IR files
+        IR = [os.path.join(ir_dir, f) for f in ir_files]
 
-        with open(ir_file_list, "r") as f:
-            IR = [line.strip() for line in f.readlines()]
-
+        # Generate corresponding VIS and HE paths
         VIS = [x.replace("/ir/", "/vis/") for x in IR]
         HE = [x.replace("/ir/", "/he/") for x in IR]
 

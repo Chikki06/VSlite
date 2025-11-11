@@ -6,3 +6,8 @@ tensorboard
 torch>=1.9.0
 torchvision
 wandb
+ipython
+opencv-python
+albumentations
+timm
+spectral
