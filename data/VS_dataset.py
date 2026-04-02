@@ -185,7 +185,12 @@ class VSDataset(BaseDataset):
     def modify_commandline_options(parser, is_train):
         parser.set_defaults(label_nc=5-1)
         parser.set_defaults(batch_size=8)
-
+        parser.add_argument(
+            '--num_ir_channels',
+            type=int,
+            default=10,
+            help='Number of IR channels to use (default: 10, can be set to 4 for subset)'
+        )
         return parser
 
     def initialize(self, opt):
@@ -268,6 +273,9 @@ class VSDataset(BaseDataset):
           #  img = np.transpose(img, (2, 0, 1))
             ir_data = img[:, :, :]
 
+            # Use only specified number of IR channels
+            num_ir_channels = getattr(self.opt, 'num_ir_channels', 10)
+            ir_data = ir_data[:, :, :num_ir_channels]
 
             ir_data[ir_data>5] = 5
             ir_data[ir_data<0] = 0
@@ -311,7 +319,18 @@ class VSDataset(BaseDataset):
         except Exception as e:
             return self.__getitem__((index + 1) % len(self.list_IR))
 
-        combined_data = np.concatenate([img_upsampled, img_V], axis=0)
+        # Determine whether to include VIS channels based on input_nc
+        input_nc = getattr(self.opt, 'input_nc', 13)
+        num_ir_channels = getattr(self.opt, 'num_ir_channels', 10)
+        
+        # If input_nc equals num_ir_channels, use IR only (no VIS)
+        # Otherwise, concatenate IR and VIS
+        if input_nc == num_ir_channels:
+            # IR only mode
+            combined_data = img_upsampled
+        else:
+            # IR + VIS mode (default)
+            combined_data = np.concatenate([img_upsampled, img_V], axis=0)
 
         combined_data = ((torch.from_numpy(combined_data).float()) - 0)/1
 

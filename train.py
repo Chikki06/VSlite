@@ -1,6 +1,49 @@
 """
 Copyright (C) 2019 NVIDIA Corporation.  All rights reserved.
 Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
+
+VSlite Training Script
+======================
+
+This script trains the VSlite model for hyperspectral to RGB image translation.
+
+Channel Configuration Options:
+------------------------------
+The model can be trained with different numbers of input channels:
+
+1. 13-channel mode (default - IR + VIS):
+   - 10 IR channels + 3 VIS channels
+   - Command: python train.py --input_nc 13 --num_ir_channels 10
+
+2. 10-channel mode (IR only):
+   - 10 IR channels only (no VIS)
+   - Command: python train.py --input_nc 10 --num_ir_channels 10
+
+3. 4-channel mode (IR subset only):
+   - 4 IR channels only (first 4 channels of IR data)
+   - Command: python train.py --input_nc 4 --num_ir_channels 4
+   - For inference with 4-channel models, use: python src/main_4channel.py --model_name <your_4ch_model.pth>
+
+Key Arguments:
+--------------
+--input_nc: Number of input channels to the network (default: 3, recommend 4, 10, or 13)
+--num_ir_channels: Number of IR channels to load from data (default: 10, recommend 4 or 10)
+--dataroot: Path to training data directory
+--name: Experiment name (will be used for checkpoint directory)
+--batch_size: Training batch size
+--niter: Number of epochs with initial learning rate
+--niter_decay: Number of epochs with learning rate decay
+
+Example Training Commands:
+---------------------------
+# Train with 4 IR channels only:
+python train.py --input_nc 4 --num_ir_channels 4 --name VS_4channel --batch_size 8
+
+# Train with 10 IR channels only:
+python train.py --input_nc 10 --num_ir_channels 10 --name VS_10channel --batch_size 8
+
+# Train with 13 channels (10 IR + 3 VIS):
+python train.py --input_nc 13 --num_ir_channels 10 --name VS_13channel --batch_size 8
 """
 
 

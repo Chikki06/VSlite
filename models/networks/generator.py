@@ -254,7 +254,9 @@ class AttUnetGenerator(BaseNetwork):
 
         backbone = resnet50(pretrained=True)
         
-        new_conv1 = nn.Conv2d(13, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # Use input_nc from options (default 13 for backward compatibility)
+        input_nc = getattr(opt, 'input_nc', 13)
+        new_conv1 = nn.Conv2d(input_nc, 64, kernel_size=7, stride=2, padding=3, bias=False)
         backbone.conv1 = new_conv1
         self.encoder = IntermediateLayerGetter(backbone, return_layers={"conv1": 'feat', "layer1": 'feat0', "layer2": 'feat1', "layer3": 'feat2', "layer4": 'feat3'})
 

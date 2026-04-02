@@ -11,3 +11,8 @@ opencv-python
 albumentations
 timm
 spectral
+
+
+pycuda
+onnxscript
+onnx
