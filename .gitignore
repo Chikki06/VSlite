@@ -3,3 +3,5 @@
 *.jpg
 __pycache__/
 tcga_tl_checkpoints/
+*.npy
+checkpoints/

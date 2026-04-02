@@ -1,8 +1,7 @@
 import os
 
 base_dirs = [
-    "/work/nvme/bdsg/kiakh93/data_same_batch_final_1024_Olympus/",
-    "/work/nvme/bdsg/kiakh93/data_same_batch_final_1024_Olympus_trip3/"
+    "/dataset/data_same_batch_final/"
 ]
 
 # Substrings from screenshot to exclude (without .tif)
