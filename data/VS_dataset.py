@@ -183,37 +183,26 @@ class RGBaug:
 class VSDataset(BaseDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train):
-        parser.set_defaults(label_nc=5-1)
+        parser.set_defaults(label_nc=5 - 1)
         parser.set_defaults(batch_size=8)
+        parser.set_defaults(no_input_semantics=True)
         parser.add_argument(
             '--num_ir_channels',
             type=int,
             default=10,
-            help='Number of IR channels to use (default: 10, can be set to 4 for subset)'
+            help='Number of IR channels to use (default: 10, can be set to 4 for subset)',
         )
         return parser
 
     def initialize(self, opt):
         self.opt = opt
-        
-        # Try different possible IR directory paths
-        possible_ir_dirs = [
-            os.path.join(opt.dataroot, "ir"),  # Direct ir folder in dataroot
-            os.path.join(opt.dataroot, "data_same_batch_final_1024", "ir"),  # Nested structure
-            os.path.join("dataset", "data_same_batch_final_1024", "ir"),  # Local dataset folder
-            os.path.join("/mnt/VSlite/dataset", "data_same_batch_final_1024", "ir")  # Absolute local path
-        ]
-        
-        ir_dir = None
-        for possible_dir in possible_ir_dirs:
-            if os.path.exists(possible_dir):
-                ir_dir = possible_dir
-                break
-        
-        if ir_dir is None:
-            raise ValueError(f"IR directory not found. Tried paths: {possible_ir_dirs}")
-        
-        print(f"Using IR directory: {ir_dir}")
+
+        ir_dir = os.path.join(opt.dataroot, 'ir')
+        if not os.path.isdir(ir_dir):
+            raise ValueError(
+                f'IR directory not found: {ir_dir}. Expected dataroot/ir with .npy patches.'
+            )
+        print(f'Using IR directory: {ir_dir}')
         
         # Get all .npy files from the IR directory
         ir_files = [f for f in os.listdir(ir_dir) if f.endswith('.npy')]
@@ -268,8 +257,9 @@ class VSDataset(BaseDataset):
         
         try:
             
-            I_name = os.path.join(self.list_IR[index%len(self.list_IR)])
-            img = np.load(I_name)
+            I_name = self.list_IR[index % len(self.list_IR)]
+            # Use mmap to reduce page-cache pressure and speed random access on network FS.
+            img = np.load(I_name, mmap_mode='r')
           #  img = np.transpose(img, (2, 0, 1))
             ir_data = img[:, :, :]
 
@@ -277,38 +267,29 @@ class VSDataset(BaseDataset):
             num_ir_channels = getattr(self.opt, 'num_ir_channels', 10)
             ir_data = ir_data[:, :, :num_ir_channels]
 
-            ir_data[ir_data>5] = 5
-            ir_data[ir_data<0] = 0
-            img = ir_data/1
+            ir_data = np.clip(ir_data, 0, 5)
+            img = ir_data
 
             target_size = (1024, 1024)
 
-            img_upsampled = np.zeros((target_size[1], target_size[0], img.shape[2]), dtype=img.dtype)
-
-            for channel in range(img.shape[2]):
-                img_upsampled[:, :, channel] = cv2.resize(img[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+            # Resize all channels in one call (much faster than per-channel Python loops).
+            img_upsampled = cv2.resize(img, target_size, interpolation=cv2.INTER_CUBIC)
 
 
 
-            V_name = os.path.join(self.list_VIS[index%len(self.list_VIS)])
-            img_V = np.load(V_name)#/256
-            img_V_upsampled = np.zeros((target_size[1], target_size[0], img_V.shape[2]), dtype=img_V.dtype)
-
-            for channel in range(img_V.shape[2]):
-                img_V_upsampled[:, :, channel] = cv2.resize(img_V[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+            V_name = self.list_VIS[index % len(self.list_VIS)]
+            img_V = np.load(V_name, mmap_mode='r')
+            img_V_upsampled = cv2.resize(img_V, target_size, interpolation=cv2.INTER_CUBIC)
            # img_V = np.transpose(img_V, (2, 0, 1))
 
             img_V = self.rgb_augmenter.forward(img_V_upsampled)/256  
            # print(img_upsampled.shape)
-            H_name = os.path.join(self.list_HE[index%len(self.list_HE)])
-            img_H = np.load(H_name)#/256
-            img_H_upsampled = np.zeros((target_size[1], target_size[0], img_H.shape[2]), dtype=img_H.dtype)
-            for channel in range(img_H.shape[2]):
-                img_H_upsampled[:, :, channel] = cv2.resize(img_H[:, :, channel], target_size, interpolation=cv2.INTER_CUBIC)
+            H_name = self.list_HE[index % len(self.list_HE)]
+            img_H = np.load(H_name, mmap_mode='r')
+            img_H_upsampled = cv2.resize(img_H, target_size, interpolation=cv2.INTER_CUBIC)
             img_upsampled, img_V, img_H= self.Allaug.forward(img_upsampled,img_V,img_H_upsampled)
             img_H = img_H/256
-            img_H[img_H>1] = 1
-            img_H[img_H<0] = 0
+            img_H = np.clip(img_H, 0, 1)
             img_H = (img_H - .5)/.5
 
 
@@ -319,27 +300,32 @@ class VSDataset(BaseDataset):
         except Exception as e:
             return self.__getitem__((index + 1) % len(self.list_IR))
 
-        # Determine whether to include VIS channels based on input_nc
+        # Channel policy must match generator input_nc (see AttUnet first conv).
+        # IR-only: input_nc == num_ir_channels (e.g. 10). IR+VIS: input_nc == num_ir_channels + 3 (e.g. 13).
+        # Any other pair used to fall through to IR+VIS and produced 13ch tensors while opt.input_nc stayed 3.
         input_nc = getattr(self.opt, 'input_nc', 13)
         num_ir_channels = getattr(self.opt, 'num_ir_channels', 10)
-        
-        # If input_nc equals num_ir_channels, use IR only (no VIS)
-        # Otherwise, concatenate IR and VIS
         if input_nc == num_ir_channels:
-            # IR only mode
-            combined_data = img_upsampled
+            combined_data = img_upsampled.float()
+        elif input_nc == num_ir_channels + 3:
+            combined_data = torch.cat([img_upsampled.float(), img_V.float()], dim=0)
         else:
-            # IR + VIS mode (default)
-            combined_data = np.concatenate([img_upsampled, img_V], axis=0)
+            raise ValueError(
+                f'VS_dataset: input_nc={input_nc} with num_ir_channels={num_ir_channels} is invalid. '
+                f'Use input_nc={num_ir_channels} for IR-only or input_nc={num_ir_channels + 3} for IR+VIS.'
+            )
 
-        combined_data = ((torch.from_numpy(combined_data).float()) - 0)/1
-
-        name = self.list_IR[index%len(self.list_IR)];
-        
-        
+        I_name = self.list_IR[index % len(self.list_IR)]
         img_T = img_H
 
-        return {'input': combined_data[:,:,:], 'target': img_T, 'name': name}
+        return {
+            'input': combined_data,
+            'target': img_T,
+            'name': I_name,
+            'image': img_T,
+            'label': combined_data,
+            'path': I_name,
+        }
 
 
 

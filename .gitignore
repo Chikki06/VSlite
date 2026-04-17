@@ -6,3 +6,4 @@ tcga_tl_checkpoints/
 *.npy
 checkpoints/
 saved_models/
+*.pth

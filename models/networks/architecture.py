@@ -135,9 +135,41 @@ class VGG19(torch.nn.Module):
         self.opt = opt
 
         import timm
-        pretrained_model = timm.create_model('timm/convnext_tiny.in12k_ft_in1k')
+        pretrained_model = timm.create_model('timm/convnext_tiny.in12k_ft_in1k', pretrained=pretrained)
         pretrained_model.head.fc = nn.Identity()
-        pretrained_model.load_state_dict(torch.load(rf'tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5'))  # modify appropriately
+
+        # Feature encoder (ConvNeXt) is defined by the TCGA checkpoint; training with this module
+        # always loads it when |opt| is provided (perceptual loss / vgg19 netF).
+        if self.opt is not None:
+            import os
+
+            raw = getattr(self.opt, 'tcga_feature_ckpt', None)
+            ckpt_path = str(raw).strip() if raw is not None else ''
+            if not ckpt_path:
+                raise ValueError(
+                    'The feature encoder requires a TCGA checkpoint path (--tcga_feature_ckpt). '
+                    'Empty or missing paths are not allowed when using this encoder.'
+                )
+            if not os.path.isfile(ckpt_path):
+                raise FileNotFoundError(
+                    f'TCGA feature checkpoint not found (required for feature encoder): {ckpt_path}'
+                )
+            ckpt = torch.load(ckpt_path, map_location='cpu')
+            # Accept common formats: raw state_dict or dict wrappers.
+            if isinstance(ckpt, dict):
+                for k in ('state_dict', 'model', 'net', 'weights'):
+                    if k in ckpt and isinstance(ckpt[k], dict):
+                        ckpt = ckpt[k]
+                        break
+            # Strip prefixes if present (e.g., 'module.')
+            if isinstance(ckpt, dict):
+                cleaned = {}
+                for k, v in ckpt.items():
+                    kk = k[7:] if k.startswith('module.') else k
+                    cleaned[kk] = v
+                ckpt = cleaned
+            pretrained_model.load_state_dict(ckpt, strict=False)
+
         self.slice1 = torch.nn.Sequential(pretrained_model.stem)
         self.slice2 = torch.nn.Sequential(pretrained_model.stages[0])
         self.slice3 = torch.nn.Sequential(pretrained_model.stages[1])

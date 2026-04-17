@@ -151,7 +151,8 @@ class ContrastivePix2PixModel(torch.nn.Module):
             self.netF_q,
             self.netF_k,
         ) = self.initialize_networks(opt)
-        if self.opt.pretrained_netF:
+        # Some eval/test option sets don't define this flag; default to False.
+        if getattr(self.opt, 'pretrained_netF', False):
             if self.opt.netF.lower() == 'vgg19':
                 self.netF_q.encoder.load_state_dict(
                     networks.VGG19(opt, True, opt.freeze_netF).state_dict()
@@ -335,9 +336,16 @@ class ContrastivePix2PixModel(torch.nn.Module):
     # |data|: dictionary of the input data
 
     def preprocess_input(self, data):
-
-
-        return data['input'], data['target']
+        # Match pix2pix: move tensors to GPU for inference/train. FID builds its own cuda batch;
+        # test.py's inference loop relies on this path.
+        inp = data['input']
+        tgt = data['target']
+        if self.use_gpu():
+            if torch.is_tensor(inp):
+                inp = inp.cuda(non_blocking=True)
+            if torch.is_tensor(tgt):
+                tgt = tgt.cuda(non_blocking=True)
+        return inp, tgt
 
     def compute_generator_loss(self, input_semantics, real_image):
         G_losses = {}

@@ -133,7 +133,12 @@ class BaseOptions:
         )
 
         # for setting inputs
-        parser.add_argument('--dataroot', type=str, default='/work/nvme/bdsg/kiakh93/data_same_batch_final_1024_Olympus/')
+        parser.add_argument(
+            '--dataroot',
+            type=str,
+            default='dataset/data_1024',
+            help='Folder containing ir/, vis/, and he/ (default: dataset/data_1024). Override with env VS_DATAROOT.',
+        )
         parser.add_argument('--dataset_mode', type=str, default='VS')
         parser.add_argument(
             '--serial_batches',
@@ -245,9 +250,8 @@ class BaseOptions:
         parser.add_argument(
             '--evaluation_metrics',
             type=str,
-            default='none',
-            choices=['fid'],
-            help='evaluation metrics to use.',
+            default='fid',
+            help='Comma-separated: fid, psnr_ssim, or none.',
         )
         parser.add_argument('--inception_weights', type=str, default='fid_inception')
         parser.add_argument(
@@ -313,6 +317,13 @@ class BaseOptions:
             type=str,
             default='vgg19',
             help='downsample the feature map: ConvEncoder | VGG | ResNet',
+        )
+        parser.add_argument(
+            '--tcga_feature_ckpt',
+            type=str,
+            default='tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5',
+            help='Path to the TCGA-pretrained ConvNeXt checkpoint for the VGG19 feature encoder '
+            '(perceptual loss / netF=vgg19). Must be non-empty and exist when that encoder is used.',
         )
         self.initialized = True
         return parser

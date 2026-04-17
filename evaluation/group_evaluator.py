@@ -16,14 +16,16 @@ def find_evaluator_using_name(filename):
 
 
 def find_evaluator_classes(opt):
-    if len(opt.evaluation_metrics) == 0:
+    raw = getattr(opt, 'evaluation_metrics', None) or ''
+    raw = raw.strip()
+    if not raw or raw.lower() == 'none':
         return []
 
-    eval_metrics = opt.evaluation_metrics.split(",")
+    eval_metrics = [m.strip() for m in raw.split(',') if m.strip()]
 
     all_classes = []
     for metric in eval_metrics:
-        metric_class = find_evaluator_using_name("%s_evaluator" % metric)
+        metric_class = find_evaluator_using_name('%s_evaluator' % metric)
         all_classes.append(metric_class)
 
     return all_classes
@@ -63,8 +65,7 @@ class GroupEvaluator(BaseEvaluator):
         self.prepare_evaluation(dataloader, fn_model_forward, name)
         num_cum_samples = 0
         for i, data_i in enumerate(dataloader):
-            # real = data_i["A"]
-            real = data_i["image"]
+            real = data_i.get('image', data_i['target'])
             minibatch_size = real.size(0)
             self.evaluate_current_batch(data_i, fn_model_forward, name)
             num_cum_samples += minibatch_size

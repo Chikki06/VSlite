@@ -1,4 +1,31 @@
-![Python 3.6](https://img.shields.io/badge/python-3.6-green.svg)
+Python 3.6
+
+## VSlite: virtual staining baseline (this repo)
+
+This targets **IR (+ optional VIS) → H&E** with `dataset_mode VS` and `model contrastive_pix2pix`.
+
+
+| Path                                                                         | Purpose                                                                                                                            |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `[train.py](train.py)`, `[test.py](test.py)`                                 | Training and evaluation entry points                                                                                               |
+| `[options/](options/)`                                                       | CLI defaults (`--dataroot` default `dataset/data_1024`, schedules, crops)                                                          |
+| `[data/VS_dataset.py](data/VS_dataset.py)`                                   | Loads `dataroot/ir/*.npy` with paired `vis/` and `he/`; **10ch IR-only** vs **13ch IR+VIS** via `--input_nc` / `--num_ir_channels` |
+| `[models/contrastive_pix2pix_model.py](models/contrastive_pix2pix_model.py)` | Losses and forward                                                                                                                 |
+| `[models/networks/](models/networks/)`                                       | Generator (uses `--input_nc`), discriminator, encoders, NCE                                                                        |
+| `[trainers/](trainers/)`                                                     | Contrastive pix2pix training steps                                                                                                 |
+| `[evaluation/](evaluation/)`                                                 | `fid`, `psnr_ssim` (comma-separated `--evaluation_metrics`)                                                                        |
+| `checkpoints/<name>/`                                                        | Weights; filenames use `util.checkpoint_filename` (legacy `*_net_*.pth` still load)                                                |
+| `results/<name>/...`                                                         | PNGs from `test.py` plus `metrics.json`                                                                                            |
+| `[legacy/](legacy/)`                                                         | TensorRT scripts, old `final_code` snapshot, unused dataset loaders, memory experiments                                            |
+
+
+**Data layout:** `dataset/data_1024/` (or `--dataroot`) with subfolders `ir/`, `vis/`, `he/` and matching `.npy` names.
+
+**Cluster jobs:** keep your own `train_job.sh` (or Slurm script) outside the repo; set `VS_DATAROOT` or `--dataroot` and run two baselines, e.g. `--input_nc 10` and `--input_nc 13 --num_ir_channels 10`.
+
+**Evaluation:** e.g. `--evaluation_metrics fid,psnr_ssim` with `--reconstruction_max_num_samples` (see `--help`). Training debug `.npy` dumps use `train.py --debug` and `--display_freq`.
+
+---
 
 # Contrastive Feature Loss for Image Prediction
 
@@ -32,7 +59,6 @@ cd contrastive-feature-loss
 ```
 
 - Create python virtual environment
-
 - Install a recent version of [PyTorch](https://pytorch.org/get-started/locally/) and other dependencies specified below.
 
 We highly recommend that you install additional dependencies in an isolated python virtual environment (of your choosing). For Conda+pip users, you can create a new conda environment and then pip install dependencies with the following snippet:
@@ -70,7 +96,6 @@ There are different modes to load images by specifying `--preprocess_mode` along
 Models can be trained with the following steps.
 
 1. Ensure you have prepared the dataset of interest using the instruction above. To train on the one of the datasets listed above, you can download the datasets and use `--dataset_mode` option, which will choose which subclass of `BaseDataset` is loaded. For custom datasets, the easiest way is to use `./data/custom_dataset.py` by specifying the option `--dataset_mode custom`, along with `--label_dir [path_to_labels] --image_dir [path_to_images]`. You also need to specify options such as `--label_nc` for the number of label classes in the dataset, `--contain_dontcare_label` to specify whether it has an unknown label, or `--no_instance` to denote the dataset doesn't have instance maps.
-
 2. Run the training script with the following command:
 
 ```bash
@@ -110,22 +135,7 @@ Use `--results_dir` to specify the output directory. `--num_test` will specify t
 
 ## Options
 
-This code repo contains many options. Some options belong to only one specific model, and some options have different default values depending on other options. To address this, the `BaseOption` class dynamically loads and sets options depending on what model, network, and datasets are used. This is done by calling the static method `modify_commandline_options` of various classes. It takes in the`parser` of `argparse` package and modifies the list of options. For example, since COCO-stuff dataset contains a special label "unknown", when COCO-stuff dataset is used, it sets `--contain_dontcare_label` automatically at `data/coco_dataset.py`. You can take a look at `def gather_options()` of `options/base_options.py`, or `models/network/__init__.py` to get a sense of how this works.
+This code repo contains many options. Some options belong to only one specific model, and some options have different default values depending on other options. To address this, the `BaseOption` class dynamically loads and sets options depending on what model, network, and datasets are used. This is done by calling the static method `modify_commandline_options` of various classes. It takes in the`parser` of `argparse` package and modifies the list of options. 
 
-## Citation
 
-If you use this code for your research, please cite our [paper](https://arxiv.org/abs/2111.06934).
 
-```bash
-@inproceedings{andonian2021contrastive,
-  title={Contrastive Feature Loss for Image Prediction},
-  author={Andonian, Alex and Park, Taesung and Russell, Bryan and Isola, Phillip and Zhu, Jun-Yan and Zhang, Richard},
-  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision},
-  pages={1934--1943},
-  year={2021}
-}
-```
-
-## Acknowledgments
-
-This code borrows heavily from [pix2pixHD](https://github.com/NVIDIA/pix2pixHD) and [SPADE](https://github.com/NVlabs/SPADE) and [CUT](https://github.com/taesungp/contrastive-unpaired-translation). We thank Jiayuan Mao for his Synchronized Batch Normalization code.

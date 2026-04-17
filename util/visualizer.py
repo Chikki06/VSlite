@@ -193,7 +193,7 @@ class Visualizer:
 
     # errors: same format as |errors| of plotCurrentErrors
     def print_current_errors(self, epoch, i, errors, t, lr):
-        message = '(epoch: %d, iters: %d, time: %.3f, lr: %.5f)) ' % (epoch, i, t, lr)
+        message = '(epoch: %d, iters: %d, time: %.3f, lr: %.5f) ' % (epoch, i, t, lr)
         for k, v in errors.items():
             # print(v)
             # if v != 0:

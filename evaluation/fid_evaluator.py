@@ -206,7 +206,19 @@ class FIDEvaluator(BaseEvaluator):
         cur_begin = self.cur_idx % self.batch_size
         cur_end = cur_begin + bs
         self.cur_target[cur_begin:cur_end] = target.cpu()
-        self.cur_source[cur_begin:cur_end] = data['label'].cpu()
+        src = data["label"].cpu()
+        # FID expects RGB-like tensors (C==3). When the model input has >3 channels
+        # (e.g. 10 IR or 13 IR+VIS), down-project to 3 channels for bookkeeping.
+        # This keeps FID evaluation from crashing; it does not change the model forward path.
+        if src.dim() == 3:
+            src = src.unsqueeze(0)
+        if src.size(1) != self.cur_source.size(1):
+            if src.size(1) >= self.cur_source.size(1):
+                src = src[:, : self.cur_source.size(1)]
+            else:
+                pad = self.cur_source.size(1) - src.size(1)
+                src = torch.cat([src, src.new_zeros(src.size(0), pad, src.size(2), src.size(3))], dim=1)
+        self.cur_source[cur_begin:cur_end] = src
         self.cur_idx = min(self.cur_idx + bs, self.nsamples)
         needs_activation = cur_end == self.batch_size or self.cur_idx == self.nsamples
 
@@ -216,7 +228,18 @@ class FIDEvaluator(BaseEvaluator):
 
             # source = self.cur_source.cuda()
             # source_path = data["A_paths" if AtoB else "B_paths"]
-            fake = fn_model_forward(data, "forward")["fake_B"]
+            # Ensure model forward runs on GPU when available.
+            if torch.cuda.is_available():
+                data_cuda = {}
+                for k, v in data.items():
+                    if torch.is_tensor(v):
+                        data_cuda[k] = v.cuda(non_blocking=True)
+                    else:
+                        data_cuda[k] = v
+            else:
+                data_cuda = data
+
+            fake = fn_model_forward(data_cuda, "forward")["fake_B"]
             self.fake_acts[begin:end] = get_activations(self.model, fake)[: end - begin]
             if self.need_real_stat:
                 cur_target = self.cur_target.cuda()

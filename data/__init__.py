@@ -44,10 +44,18 @@ def create_dataloader(opt):
     instance.initialize(opt)
     print("dataset [%s] of size %d was created" %
           (type(instance).__name__, len(instance)))
+    num_workers = int(opt.nThreads)
+    # Pinning speeds up CPU->GPU transfer when using CUDA.
+    pin_memory = bool(getattr(opt, 'gpu_ids', []))
+    # Keep workers alive across epochs to avoid fork/spawn overhead.
+    persistent_workers = num_workers > 0
     return torch.utils.data.DataLoader(
         instance,
         batch_size=opt.batch_size,
         shuffle=not opt.serial_batches,
-        num_workers=int(opt.nThreads),
-        drop_last=opt.isTrain
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        prefetch_factor=2 if num_workers > 0 else None,
+        drop_last=opt.isTrain,
     )
