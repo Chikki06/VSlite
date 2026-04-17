@@ -1,0 +1,55 @@
+## SwinGAN i2i attention variant (CBAM + perceptual ConvNeXt)
+
+## Data
+dataroot: ""
+input_mode: "ir10"
+num_ir_channels: 10
+img_size: 256
+he_scale: "minus1_1"
+split: null
+split_seed: 1337
+split_fracs: [0.9, 0.05, 0.05]
+max_items: null
+
+## Output
+output_dir: "OUTPUT_PATH"
+
+## Pretraining (ImageNet Swin-T, 3ch — backbone only; 1x1 projection trained from scratch)
+pretrained_swin_ckpt: "/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN/pretrained_ckpt/swin_tiny_patch4_window7_224.pth"
+
+## Model (Swin-Unet)
+patch_size: 4
+embed_dim: 96
+depths: [2, 2, 6, 2]
+num_heads: [3, 6, 12, 24]
+window_size: 8
+mlp_ratio: 4.
+qkv_bias: True
+qk_scale: null
+drop_rate: 0.0
+drop_path_rate: 0.1
+ape: False
+patch_norm: True
+use_checkpoint: False
+
+## Attention / feature extractor
+use_cbam: true
+use_perceptual: true
+lambda_perceptual: 10.0
+
+## Train
+device: "cuda"
+gpu_id: "0"
+epochs_n: 50
+batch_size: 4
+print_freq: 100
+lr_g: 0.0002
+lr_d: 0.0002
+train_num_workers: 4
+val_num_workers: 2
+gan_training: true
+
+lambda_l1: 100.0
+lambda_gan: 1.0
+
+tcga_feature_ckpt: "/projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5"

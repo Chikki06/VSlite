@@ -1,0 +1,76 @@
+## SwinGAN config adapted for VSlite HE .npy patches (non-MRI, but runs end-to-end)
+dataset: "VSLITE_NPY"
+
+## Data
+# Point these at directories that contain *.npy (each is HxWx3 or HxW).
+# By default, the provided batch job overrides these via SWINGAN_TRAIN_DATA_DIR / SWINGAN_VAL_DATA_DIR.
+train_data_dir: ""
+val_data_dir: ""
+
+## Outputs
+output_dir: "OUTPUT_PATH"
+
+## Masking
+sampling_percentage: 20
+mask_type: random           # radial, cartesian, random, gaussian, poisson
+
+## Input shaping
+num_input_slices: 3         # uses neighbors in the sorted file list
+img_size: 256               # SwinGAN was tuned for 256; keep this unless you change masks too
+slice_range: [0, 1]         # unused for VSLITE_NPY but kept for compatibility
+
+## Checkpointing
+load_cp: 0
+resume_training: 1
+
+## Networks
+bilinear: 1
+crop_center: 128
+
+## Swin-Transformer (in_chans must equal num_input_slices*2)
+num_classes: 1
+patch_size: 4
+in_chans: 6
+embed_dim: 96
+depths: [2, 2, 6, 2]
+num_heads: [3, 6, 12, 24]
+window_size: 8
+mlp_ratio: 4.
+qkv_bias: True
+qk_scale: None
+drop_rate: 0.0
+drop_path_rate: 0.1
+ape: False
+patch_norm: True
+use_checkpoint: False
+
+## Training
+lr: 0.001
+epochs_n: 50
+batch_size: 8
+GAN_training: 1
+loss_weights: [1000, 1000, 5, 0.1, 0]
+minmax_noise_val: [-0.01, 0.01]
+
+## Tensorboard
+tb_write_losses: 1
+tb_write_images: 0
+
+## Runtime
+device: 'cuda'
+gpu_id: '0'
+train_num_workers: 4
+val_num_workers: 2
+
+## Predict (unused in training job)
+save_prediction: 1
+save_path: "SAVE_path"
+visualize_images: 0
+model: ""
+predict_data_dir: ""
+
+## Additional
+GP: True
+ST: True
+iRPE: False
+
