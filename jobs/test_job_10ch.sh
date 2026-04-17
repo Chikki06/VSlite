@@ -1,1 +1,1 @@
-/u/akshahi2/test_job_10ch.sh
+/u/akshahi2/jobs/test_job_10ch.sh

@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from models.networks.architecture import VGG19
+from models.networks.architecture import ConvNeXtFeatureExtractor
 from models.networks.base_network import BaseNetwork
 from models.networks.normalization import get_nonspade_norm_layer
 from models.networks.utils import FeatureHooks
@@ -72,7 +72,7 @@ class ContrastiveEncoder(BaseNetwork):
             self.weights = np.array([1.0, 1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0])
             self.weights = self.weights / np.sum(self.weights)
             self.weights = self.weights[1:]
-            return VGG19(
+            return ConvNeXtFeatureExtractor(
                 opt=opt,
                 pretrained=pt,
                 freeze_weights=opt.freeze_netF,

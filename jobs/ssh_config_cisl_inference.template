@@ -1,0 +1,7 @@
+Host cisl-inference
+    HostName cisl-inference.beckman.illinois.edu
+    User akshahi2
+    IdentityFile ~/.ssh/id_cisl_inference
+    IdentitiesOnly yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 4

@@ -1,1 +1,1 @@
-/u/akshahi2/vs_test_common.sh
+/u/akshahi2/jobs/vs_test_common.sh

@@ -1,0 +1,1 @@
+/u/akshahi2/jobs/swingan_infer.sh

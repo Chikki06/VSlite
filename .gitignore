@@ -1,9 +1,164 @@
-*.pyc
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs / testing
+pip-log.txt
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+torchenv/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Data / Images / Raster
+*.npz
+*.npy
+*.bsq
+*.tif
+*.tiff
+*.hdr
 *.png
 *.jpg
-__pycache__/
-tcga_tl_checkpoints/
-*.npy
+*.jpeg
+*.bmp
+
+# Checkpoints / Deep Learning models
+*.pth
+*.pt
+*.h5
+*.hdf5
+*.onnx
+*.weights
 checkpoints/
 saved_models/
+tcga_tl_checkpoints/
+
+# Logging & Output
+*.log
+*.csv
+*.err
+*.out
+events.out*
+events.out.tfevents.*
+
+# Project Specific Directories (Results, Data, Logs)
+results/
+dataset/data_1024/
+dataset/data_frozen/
+input/IR/
+input/VIS/
+evaluation/cache/
+**/cache/# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+
+# Testing / coverage
+htmlcov/
+.coverage.*
+.pytest_cache/
+
+# Environments
+.env
+.venv
+venv/
+env/
+torchenv/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Data / Images / Raster
+*.npz
+*.npy
+*.bsq
+*.tif
+*.tiff
+*.hdr
+*.png
+*.jpg
+
+# Checkpoints / Deep Learning models
 *.pth
+*.pt
+*.h5
+*.onnx
+checkpoints/
+saved_models/
+tcga_tl_checkpoints/
+
+# Logging & Output
+*.log
+*.csv
+*.err
+*.out
+events.out*
+
+# Project Specific
+results/
+dataset/data_1024/
+dataset/data_frozen/
+input/IR/
+input/VIS/
+evaluation/cache/
+**/cache/

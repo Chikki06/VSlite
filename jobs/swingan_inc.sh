@@ -1,1 +1,1 @@
-/u/akshahi2/swingan_inc.sh
+/u/akshahi2/jobs/swingan/baseline/swingan_inc.sh

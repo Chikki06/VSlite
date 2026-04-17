@@ -1,1 +1,0 @@
-MODE: EVAL | FIDtest9199: 102.252 

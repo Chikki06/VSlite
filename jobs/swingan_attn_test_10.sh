@@ -1,1 +1,1 @@
-/u/akshahi2/swingan_attn_test_10.sh
+/u/akshahi2/jobs/swingan_attn_test_10.sh

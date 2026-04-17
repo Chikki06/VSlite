@@ -83,7 +83,7 @@ class ResnetBlock(nn.Module):
 
 
 # # VGG architecter, used for the perceptual loss using a pretrained VGG network
-# class VGG19(torch.nn.Module):
+# class ConvNeXtFeatureExtractor(torch.nn.Module):
 #     def __init__(self, opt=None, pretrained=True, freeze_weights=True, before_relu=False):
 #         super().__init__()
 #         self.opt = opt
@@ -129,13 +129,13 @@ class ResnetBlock(nn.Module):
 
 
 # In-house feature extractor; by default, always pretrained & after relu
-class VGG19(torch.nn.Module):
+class ConvNeXtFeatureExtractor(torch.nn.Module):
     def __init__(self, opt=None, pretrained=True, freeze_weights=True, before_relu=False):
         super().__init__()
         self.opt = opt
 
         import timm
-        pretrained_model = timm.create_model('timm/convnext_tiny.in12k_ft_in1k', pretrained=pretrained)
+        pretrained_model = timm.create_model('timm/convnext_tiny.in12k_ft_in1k')
         pretrained_model.head.fc = nn.Identity()
 
         # Feature encoder (ConvNeXt) is defined by the TCGA checkpoint; training with this module

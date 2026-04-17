@@ -1,1 +1,0 @@
-/u/akshahi2/swingan_base_test_10.sh

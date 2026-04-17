@@ -40,6 +40,22 @@ iter_counter = IterationCounter(opt, len(dataloader.dataset))
 visualizer = Visualizer(opt)
 evaluator = group_evaluator.GroupEvaluator(opt)
 
+
+def _displayable_input(input_tensor):
+    """Return an image-like tensor for visualization (1 or 3 channels)."""
+    if input_tensor is None:
+        return None
+    if input_tensor.dim() < 4:
+        return input_tensor
+    c = input_tensor.shape[1]
+    if c == 1 or c == 3:
+        return input_tensor
+    if c >= 3:
+        return input_tensor[:, :3, ...]
+    # Fallback: repeat the first channel to RGB for odd edge-cases.
+    first = input_tensor[:, :1, ...]
+    return first.repeat(1, 3, 1, 1)
+
 for epoch in iter_counter.training_epochs():
     iter_counter.record_epoch_start(epoch)
     latest_visuals = None
@@ -67,9 +83,10 @@ for epoch in iter_counter.training_epochs():
             step = iter_counter.total_steps_so_far
             generated = trainer.get_latest_generated()
             if generated is not None:
+                input_preview = _displayable_input(data_i['input'])
                 latest_visuals = OrderedDict(
                     [
-                        ('input', data_i['input']),
+                        ('input', input_preview),
                         ('synthesized_image', generated),
                         ('real_image', data_i['target']),
                     ]
@@ -89,9 +106,10 @@ for epoch in iter_counter.training_epochs():
 
         generated = trainer.get_latest_generated()
         if generated is not None:
+            input_preview = _displayable_input(data_i['input'])
             latest_visuals = OrderedDict(
                 [
-                    ('input', data_i['input']),
+                    ('input', input_preview),
                     ('synthesized_image', generated),
                     ('real_image', data_i['target']),
                 ]

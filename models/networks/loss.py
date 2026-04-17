@@ -7,7 +7,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from models.networks.architecture import VGG19
+from models.networks.architecture import ConvNeXtFeatureExtractor
 
 
 # Defines the GAN loss which uses either LSGAN or the regular GAN.
@@ -94,7 +94,7 @@ class GANLoss(nn.Module):
 
 
 # Perceptual loss that uses a pretrained VGG network
-class VGGLoss(nn.Module):
+class ConvNeXtLoss(nn.Module):
     DEFAULT_WEIGHTS = np.array([1.0, 1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0])
     CRN_WEIGHTS = np.array([1.0, 1 / 2.6, 1 / 4.8, 1 / 3.7, 1 / 5.6, 10 / 1.5])
 
@@ -103,7 +103,7 @@ class VGGLoss(nn.Module):
         self.opt = opt
         fw = not vars(opt).get('unfrozen_vgg', False)
         pt = vars(opt).get('pretrained_vgg', True)
-        self.vgg = VGG19(opt, pretrained=pt, freeze_weights=fw).cuda()
+        self.vgg = ConvNeXtFeatureExtractor(opt, pretrained=pt, freeze_weights=fw).cuda()
         self.criterion = nn.L1Loss()
         if self.opt.use_crn_lambdas:
             self.weights = self.CRN_WEIGHTS
@@ -139,7 +139,7 @@ class PerceptualLoss(nn.Module):
 
     def _get_model(self, opt):
         if opt.perceptual_encoder == 'vgg':
-            return VGGLoss(opt)
+            return ConvNeXtLoss(opt)
         else:
             raise ValueError(
                 f'Unrecognized perceptual encoder: {opt.perceptual_encoder}'
