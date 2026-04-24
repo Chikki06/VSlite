@@ -1,1 +1,0 @@
-/u/akshahi2/jobs/swingan_train_job.sh

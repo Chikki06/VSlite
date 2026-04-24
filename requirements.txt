@@ -12,6 +12,15 @@ albumentations
 timm
 spectral
 
+# Diffusion + bridge model deps (I2SB / BBDM wrappers)
+omegaconf
+torchsummary
+torch-ema
+torchmetrics
+easydict
+colored-traceback
+ipdb
+
 
 pycuda
 onnxscript

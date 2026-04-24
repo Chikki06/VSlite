@@ -59,7 +59,7 @@ tb_write_images: 0
 ## Runtime
 device: 'cuda'
 gpu_id: '0'
-train_num_workers: 4
+train_num_workers: 16
 val_num_workers: 2
 
 ## Predict (unused in training job)

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
-import cv2
 import torch
 from torch.utils.data import Dataset
 
@@ -135,8 +134,12 @@ class VSLiteI2IDataset(Dataset):
             return t
         
         import torch.nn.functional as F
-        return F.interpolate(t.unsqueeze(0), size=(self.img_size, self.img_size), mode='bilinear', align_corners=False).squeeze(0)
-        return out
+        return F.interpolate(
+            t.unsqueeze(0),
+            size=(self.img_size, self.img_size),
+            mode="bilinear",
+            align_corners=False,
+        ).squeeze(0)
 
     def _prep_ir(self, ir: torch.Tensor) -> torch.Tensor:
         lo, hi = self.ir_clip

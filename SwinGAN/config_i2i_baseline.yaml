@@ -36,12 +36,12 @@ use_checkpoint: False
 device: "cuda"
 gpu_id: "0"
 epochs_n: 50
-batch_size: 4
+batch_size: 32
 print_freq: 100              # console log every ~this many images (like VS train.py); env SWINGAN_PRINT_FREQ
 lr_g: 0.0002
 lr_d: 0.0002
-train_num_workers: 4
-val_num_workers: 2
+train_num_workers: 16
+val_num_workers: 4
 gan_training: true
 
 lambda_l1: 100.0

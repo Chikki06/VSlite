@@ -1,9 +1,14 @@
 import os
 import subprocess
 import sys
+import importlib.util
+
+import pytest
 
 
 def test_train_i2i_runs_one_epoch_cpu(tmp_path):
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("torch is not installed")
     # Build minimal fake dataroot
     import numpy as np
 

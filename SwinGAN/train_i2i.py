@@ -4,10 +4,9 @@ import os
 import shutil
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
-import numpy as np
-from PIL import Image
 import torch
 import yaml
 from torch.utils.data import DataLoader
@@ -18,10 +17,16 @@ try:
 except ImportError:
     tqdm = None  # type: ignore
 
+_THIS_DIR = Path(__file__).resolve().parent
+_VSLITE_ROOT = _THIS_DIR.parent
+if str(_VSLITE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_VSLITE_ROOT))
+
 from Networks.discriminator_model import PatchGAN
 from Networks.vision_transformer import ProjectedSwinUnet
 from loss_i2i import GANLoss, ConvNeXtFeatureExtractor
 from utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
+from utils.sample_saver import save_sample_palette_png, save_sample_pngs
 
 
 logger = logging.getLogger(__name__)
@@ -50,33 +55,6 @@ def build_split_fracs(cfg):
     return SplitFractions(train=float(fr[0]), val=float(fr[1]), test=float(fr[2]))
 
 
-def _tensor_to_png_array(tensor: torch.Tensor, prefer_last_three: bool = False) -> np.ndarray:
-    tensor = tensor.detach().float().cpu()
-    if tensor.ndim == 4:
-        tensor = tensor[0]
-    if tensor.ndim != 3:
-        raise ValueError(f"Expected CHW or BCHW tensor, got shape {tuple(tensor.shape)}")
-    if tensor.shape[0] > 3:
-        tensor = tensor[-3:] if prefer_last_three else tensor[:3]
-    if tensor.min().item() < 0.0:
-        tensor = (tensor + 1.0) / 2.0
-    tensor = tensor.clamp(0.0, 1.0)
-    array = (tensor * 255.0).round().to(torch.uint8).permute(1, 2, 0).numpy()
-    if array.shape[2] == 1:
-        array = array[:, :, 0]
-    return array
-
-
-def save_sample_pngs(out_dir: str, name: str, x: torch.Tensor, y: torch.Tensor, yhat: torch.Tensor, input_mode: str):
-    os.makedirs(out_dir, exist_ok=True)
-    input_preview = _tensor_to_png_array(x, prefer_last_three=(input_mode == "irvis13"))
-    target_preview = _tensor_to_png_array(y)
-    pred_preview = _tensor_to_png_array(yhat)
-    Image.fromarray(input_preview).save(os.path.join(out_dir, f"{name}_input.png"))
-    Image.fromarray(target_preview).save(os.path.join(out_dir, f"{name}_target.png"))
-    Image.fromarray(pred_preview).save(os.path.join(out_dir, f"{name}_pred.png"))
-
-
 @torch.no_grad()
 def validate(G, loader, device, l1_loss):
     G.eval()
@@ -98,6 +76,10 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     cfg, cfg_dict = load_config(args_cli.config)
+
+    # Perceptual loss defaults (match pix2pix path unless explicitly overridden).
+    cfg.vgg_normalize_input = bool(getattr(cfg, "vgg_normalize_input", True))
+    cfg.vgg_loss_include_input = bool(getattr(cfg, "vgg_loss_include_input", False))
 
     # Env overrides (batch scripts)
     cfg.dataroot = _get_env("SWINGAN_DATAROOT", getattr(cfg, "dataroot", ""))
@@ -221,6 +203,7 @@ def main():
     use_tqdm = tqdm is not None and sys.stderr.isatty()
     bs = int(cfg.batch_size)
     total_epochs = int(cfg.epochs_n)
+    save_epoch_freq = int(getattr(cfg, "save_epoch_freq", 1))
     start_epoch = 0
     global_step = 0
 
@@ -282,10 +265,8 @@ def main():
             g_gan = gan.g_loss(pred_fake_for_g) * float(getattr(cfg, "lambda_gan", 1.0))
             g_l1 = l1(y_hat, y) * float(getattr(cfg, "lambda_l1", 100.0))
             if perceptual is not None:
-                # ConvNeXt expects 0..1 range; map [-1,1] -> [0,1]
-                y01 = (y + 1.0) / 2.0
-                yhat01 = (y_hat + 1.0) / 2.0
-                g_perc = perceptual(yhat01, y01) * float(getattr(cfg, "lambda_perceptual", 10.0))
+                # Standardized perceptual loss: pass tensors in [-1, 1] (normalization handled inside).
+                g_perc = perceptual(y_hat, y) * float(getattr(cfg, "lambda_perceptual", 10.0))
             else:
                 g_perc = torch.tensor(0.0, device=device)
             g_loss = g_gan + g_l1 + g_perc
@@ -353,15 +334,24 @@ def main():
             "optD": optD.state_dict(),
             "config": cfg_dict,
         }
-        # Keep both a per-epoch checkpoint and a stable filename so downstream jobs can
-        # reference a predictable path (e.g., $SWINGAN_OUTPUT_DIR/ckpt_latest.pth).
-        torch.save(ckpt, os.path.join(cfg.output_dir, f"ckpt_epoch{epoch+1}.pth"))
+        # Keep a stable filename so downstream jobs can reference a predictable path
+        # (e.g., $SWINGAN_OUTPUT_DIR/ckpt_latest.pth).
         torch.save(ckpt, os.path.join(cfg.output_dir, "ckpt_latest.pth"))
-        logger.info("Saved checkpoint epoch %d", epoch + 1)
+        if (epoch + 1) % save_epoch_freq == 0 or (epoch + 1) == total_epochs:
+            torch.save(ckpt, os.path.join(cfg.output_dir, f"ckpt_epoch{epoch+1}.pth"))
+            logger.info("Saved checkpoint epoch %d", epoch + 1)
 
         if last_preview is not None:
             preview_name = f"epoch{epoch + 1:03d}"
             save_sample_pngs(
+                sample_dir,
+                preview_name,
+                last_preview[0],
+                last_preview[1],
+                last_preview[2],
+                cfg.input_mode,
+            )
+            save_sample_palette_png(
                 sample_dir,
                 preview_name,
                 last_preview[0],

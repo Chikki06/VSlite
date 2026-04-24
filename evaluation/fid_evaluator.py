@@ -2,6 +2,7 @@
 # Functions related to computing FID were borrowed from
 # https://github.com/mseitzer/pytorch-fid/blob/master/fid_score.py
 ###################################################
+import json
 import numpy as np
 import torch
 import os
@@ -87,6 +88,16 @@ class FIDEvaluator(BaseEvaluator):
         parser.add_argument(
             '--cache_dir', type=str, default=os.path.join(DIR_PATH, 'cache')
         )
+        parser.add_argument(
+            '--skip_fid_if_cached', action='store_true',
+            help='Skip FID computation if cached metrics exist for this run (see evaluation/cache).',
+        )
+        parser.add_argument(
+            '--skip_f_if_cached',
+            dest='skip_fid_if_cached',
+            action='store_true',
+            help='Alias for --skip_fid_if_cached.',
+        )
         return parser
 
     def __init__(self, opt):
@@ -108,6 +119,26 @@ class FIDEvaluator(BaseEvaluator):
             ),
         )
 
+    def fid_metrics_json_path(self, phase, dataset_mode=None):
+        """Path to cached final FID numbers (used by --skip_fid_if_cached)."""
+        if dataset_mode is None:
+            dataset_mode = self.opt.dataset_mode
+        target_dir = os.path.expanduser(os.path.join(self.opt.cache_dir, dataset_mode))
+        os.makedirs(target_dir, exist_ok=True)
+        name = getattr(self.opt, 'name', 'unknown')
+        w_ep = getattr(self.opt, 'which_epoch', 'latest')
+        return os.path.join(
+            target_dir,
+            'fid_metrics__{}__{}__{}__{}__{}__{}.json'.format(
+                name,
+                w_ep,
+                dataset_mode,
+                phase,
+                self.opt.inception_weights,
+                self.opt.FID_max_num_samples,
+            ),
+        )
+
     def find_cached_activations(self, phase):
         cache_path = self.cache_path(phase)
         if os.path.exists(cache_path):
@@ -123,8 +154,21 @@ class FIDEvaluator(BaseEvaluator):
         print("Cache saved at %s for FID" % cache_path)
 
     def prepare_evaluation(self, phase, dataloader, fn_model_forward, name):
-        print("preparing for FID")
         self.current_phase = phase
+        self._skip_fid = False
+        self._cached_fid_metrics = None
+        if getattr(self.opt, 'skip_fid_if_cached', False):
+            cache_json = self.fid_metrics_json_path(phase)
+            if os.path.isfile(cache_json):
+                with open(cache_json, 'r') as f:
+                    self._cached_fid_metrics = json.load(f)
+                print(
+                    'Skipping FID (loaded cached metrics from %s)' % cache_json
+                )
+                self._skip_fid = True
+                return
+
+        print("preparing for FID")
         print('Loading Inception network')
         self.model = InceptionV3(inception_weights=self.opt.inception_weights)
         self.model.cuda()
@@ -195,6 +239,8 @@ class FIDEvaluator(BaseEvaluator):
                 self.real_acts[begin:end] = cur_real_acts
 
     def evaluate_current_batch(self, data, fn_model_forward, name):
+        if getattr(self, '_skip_fid', False):
+            return
         # AtoB = self.opt.direction == "AtoB"
         target = data['image']
         bs, C, H, W = target.size()
@@ -247,6 +293,8 @@ class FIDEvaluator(BaseEvaluator):
                 self.real_acts[begin:end] = cur_real_acts
 
     def should_stop_evaluation(self, num_cum_samples):
+        if getattr(self, '_skip_fid', False):
+            return True
         return self.cur_idx >= self.nsamples
 
     def remember_current_activations(self):
@@ -267,6 +315,9 @@ class FIDEvaluator(BaseEvaluator):
         self.all_acts[self.current_phase + "fake"] = fake_acts
 
     def finish_evaluation(self, dataloader, fn_model_forward, name):
+        if getattr(self, '_skip_fid', False) and self._cached_fid_metrics is not None:
+            return OrderedDict(self._cached_fid_metrics)
+
         self.remember_current_activations()
 
         fids = OrderedDict()
@@ -286,5 +337,13 @@ class FIDEvaluator(BaseEvaluator):
             real_mean, real_cov = self.find_cached_activations("traintest")
             fid = calculate_frechet_distance(real_mean, real_cov, fake_mean, fake_cov)
             fids['FID%s' % "traintest"] = fid
+
+        cache_json = self.fid_metrics_json_path(self.current_phase)
+        try:
+            with open(cache_json, 'w') as f:
+                json.dump(dict(fids), f, indent=2)
+            print('Wrote FID metrics cache to %s' % cache_json)
+        except OSError as e:
+            print('WARNING: could not write FID metrics cache: %s' % e)
 
         return fids

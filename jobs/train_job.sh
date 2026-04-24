@@ -1,1 +1,0 @@
-/u/akshahi2/jobs/train_job.sh

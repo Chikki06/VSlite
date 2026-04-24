@@ -1,6 +1,10 @@
 import os
 import numpy as np
 
+import pytest
+
+pytest.importorskip("torch")
+
 from SwinGAN.utils.dataset_vslite_i2i import VSLiteI2IDataset, SplitFractions
 
 

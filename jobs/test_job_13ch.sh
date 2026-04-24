@@ -1,1 +1,0 @@
-/u/akshahi2/jobs/test_job_13ch.sh

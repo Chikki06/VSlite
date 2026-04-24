@@ -63,6 +63,12 @@ class GroupEvaluator(BaseEvaluator):
         if name is None:
             name = str(type(self).__name__)
         self.prepare_evaluation(dataloader, fn_model_forward, name)
+        # FID (and similar) may load metrics from disk and set _skip_fid to avoid
+        # any dataloader / model-forward work.
+        if self.evaluators and all(
+            getattr(ev, '_skip_fid', False) for ev in self.evaluators
+        ):
+            return self.finish_evaluation(dataloader, fn_model_forward, name)
         num_cum_samples = 0
         for i, data_i in enumerate(dataloader):
             real = data_i.get('image', data_i['target'])

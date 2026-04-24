@@ -192,6 +192,13 @@ class VSDataset(BaseDataset):
             default=10,
             help='Number of IR channels to use (default: 10, can be set to 4 for subset)',
         )
+        parser.add_argument(
+            '--ir_channel_indices',
+            type=str,
+            default='',
+            help='Optional comma-separated list of IR channel indices to select (e.g. "0,8,9"). '
+            'If set, overrides --num_ir_channels slicing.',
+        )
         return parser
 
     def initialize(self, opt):
@@ -263,9 +270,25 @@ class VSDataset(BaseDataset):
           #  img = np.transpose(img, (2, 0, 1))
             ir_data = img[:, :, :]
 
-            # Use only specified number of IR channels
+            # IR channel selection: either explicit indices or first N channels.
             num_ir_channels = getattr(self.opt, 'num_ir_channels', 10)
-            ir_data = ir_data[:, :, :num_ir_channels]
+            raw_idx = getattr(self.opt, 'ir_channel_indices', '')
+            raw_idx = str(raw_idx).strip() if raw_idx is not None else ''
+            if raw_idx:
+                try:
+                    idx = [int(x.strip()) for x in raw_idx.split(',') if x.strip() != '']
+                except Exception:
+                    raise ValueError(f'Invalid --ir_channel_indices={raw_idx!r}. Expected comma-separated ints like "0,8,9".')
+                if not idx:
+                    raise ValueError(f'Invalid --ir_channel_indices={raw_idx!r}. No indices parsed.')
+                c_tot = int(ir_data.shape[2])
+                bad = [i for i in idx if i < 0 or i >= c_tot]
+                if bad:
+                    raise ValueError(f'--ir_channel_indices out of range for IR channels={c_tot}: {bad}')
+                ir_data = ir_data[:, :, idx]
+                num_ir_channels = len(idx)
+            else:
+                ir_data = ir_data[:, :, :num_ir_channels]
 
             ir_data = np.clip(ir_data, 0, 5)
             img = ir_data
@@ -301,10 +324,12 @@ class VSDataset(BaseDataset):
             return self.__getitem__((index + 1) % len(self.list_IR))
 
         # Channel policy must match generator input_nc (see AttUnet first conv).
-        # IR-only: input_nc == num_ir_channels (e.g. 10). IR+VIS: input_nc == num_ir_channels + 3 (e.g. 13).
+        # IR-only: input_nc == selected_num_ir_channels (e.g. 10 or 3).
+        # IR+VIS:  input_nc == selected_num_ir_channels + 3 (e.g. 13 or 6).
         # Any other pair used to fall through to IR+VIS and produced 13ch tensors while opt.input_nc stayed 3.
         input_nc = getattr(self.opt, 'input_nc', 13)
-        num_ir_channels = getattr(self.opt, 'num_ir_channels', 10)
+        # num_ir_channels may be overridden by --ir_channel_indices above; infer from tensor if needed.
+        num_ir_channels = int(img_upsampled.shape[0]) if hasattr(img_upsampled, "shape") else getattr(self.opt, 'num_ir_channels', 10)
         if input_nc == num_ir_channels:
             combined_data = img_upsampled.float()
         elif input_nc == num_ir_channels + 3:

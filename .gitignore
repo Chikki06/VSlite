@@ -58,6 +58,9 @@ torchenv/
 *.swo
 .DS_Store
 
+# Local upstream clones (not part of VSlite)
+_vendor/
+
 # Data / Images / Raster
 *.npz
 *.npy

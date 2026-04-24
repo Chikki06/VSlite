@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --job-name=b_13_tr
+#SBATCH --partition=IllinoisComputes-GPU
+#SBATCH -A kf4-ic
+#SBATCH --mem=64G
+#SBATCH --gpus=1
+#SBATCH --cpus-per-task=4
+#SBATCH --time=71:00:00
+#SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite
+#SBATCH --output=/u/akshahi2/logs/%x/%j.out
+#SBATCH --error=/u/akshahi2/logs/%x/%j.err
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=akshahi2@illinois.edu
+
+source ~/.bashrc
+conda activate torchenv
+
+export PYTHONUNBUFFERED=1
+export VS_DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
+export CHECKPOINTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline"
+NAME="vs13"
+
+python scripts/train.py --dataroot "$VS_DATAROOT" --dataset_mode VS --model contrastive_pix2pix \
+  --gpu_ids 0 --nThreads 4 --batch_size 10 --load_size 1024 --crop_size 512 \
+  --print_freq 100 --save_epoch_freq 5 --save_latest_freq 30000 --display_freq 30000 \
+  --evaluation_freq 5000 --continue_train true --name "$NAME" \
+  --checkpoints_dir "$CHECKPOINTS_DIR" --input_nc 13 --num_ir_channels 10
+
+python /projects/illinois/eng/bioe/rxb/akshat/VSlite/util/plot_loss_curves.py \
+  --log_dir "$CHECKPOINTS_DIR/$NAME" --out_dir "$CHECKPOINTS_DIR/$NAME/curves" || true

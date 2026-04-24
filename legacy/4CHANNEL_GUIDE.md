@@ -28,7 +28,7 @@ VSlite now supports multiple input channel configurations:
 ### Training with 4 Channels (IR Subset)
 
 ```bash
-python train.py \
+python scripts/train.py \
     --input_nc 4 \
     --num_ir_channels 4 \
     --name VS_4channel_experiment \
@@ -41,7 +41,7 @@ python train.py \
 ### Training with 10 Channels (IR Only)
 
 ```bash
-python train.py \
+python scripts/train.py \
     --input_nc 10 \
     --num_ir_channels 10 \
     --name VS_10channel_experiment \
@@ -54,7 +54,7 @@ python train.py \
 ### Training with 13 Channels (IR + VIS)
 
 ```bash
-python train.py \
+python scripts/train.py \
     --input_nc 13 \
     --num_ir_channels 10 \
     --name VS_13channel_experiment \
@@ -251,7 +251,7 @@ If you encounter any problems or have questions about the 4-channel training/inf
 
 ```bash
 # 1. Train a 4-channel model
-python train.py \
+python scripts/train.py \
     --input_nc 4 \
     --num_ir_channels 4 \
     --name my_4ch_model \

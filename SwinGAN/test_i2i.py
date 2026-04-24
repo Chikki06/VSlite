@@ -1,6 +1,8 @@
 import argparse
 import os
 import shutil
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -10,8 +12,17 @@ import yaml
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+_THIS_DIR = Path(__file__).resolve().parent
+_VSLITE_ROOT = _THIS_DIR.parent
+if str(_VSLITE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_VSLITE_ROOT))
+if str(_THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(_THIS_DIR))
+
 from Networks.vision_transformer import ProjectedSwinUnet
 from utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
+from SwinGAN.utils.sample_saver import save_palette5_pred_target_png
+from util.i2i_metrics import compute_metrics_streaming
 
 
 def _get_env(name: str, default=None):
@@ -76,11 +87,31 @@ def _tensor_to_png_array(tensor: torch.Tensor, prefer_last_three: bool = False) 
 
 def save_pngs(out_dir: str, name: str, x: torch.Tensor, y: torch.Tensor, yhat: torch.Tensor, input_mode: str):
     os.makedirs(out_dir, exist_ok=True)
+    x_png = _tensor_to_png_array(x, prefer_last_three=(input_mode == "irvis13"))
+    y_png = _tensor_to_png_array(y)
+    yhat_png = _tensor_to_png_array(yhat)
+    # Legacy filenames
+    Image.fromarray(x_png).save(os.path.join(out_dir, f"{name}_x.png"))
+    Image.fromarray(y_png).save(os.path.join(out_dir, f"{name}_y.png"))
+    Image.fromarray(yhat_png).save(os.path.join(out_dir, f"{name}_yhat.png"))
+    # Standardized filenames (match Restormer i2i naming)
+    Image.fromarray(x_png).save(os.path.join(out_dir, f"{name}_input.png"))
+    Image.fromarray(y_png).save(os.path.join(out_dir, f"{name}_target.png"))
+    Image.fromarray(yhat_png).save(os.path.join(out_dir, f"{name}_pred.png"))
+
+
+def _save_standard_dirs(root: str, name: str, x: torch.Tensor, y: torch.Tensor, yhat: torch.Tensor, input_mode: str):
+    in_dir = os.path.join(root, "input")
+    tg_dir = os.path.join(root, "target")
+    pr_dir = os.path.join(root, "pred")
+    os.makedirs(in_dir, exist_ok=True)
+    os.makedirs(tg_dir, exist_ok=True)
+    os.makedirs(pr_dir, exist_ok=True)
     Image.fromarray(_tensor_to_png_array(x, prefer_last_three=(input_mode == "irvis13"))).save(
-        os.path.join(out_dir, f"{name}_x.png")
+        os.path.join(in_dir, f"{name}.png")
     )
-    Image.fromarray(_tensor_to_png_array(y)).save(os.path.join(out_dir, f"{name}_y.png"))
-    Image.fromarray(_tensor_to_png_array(yhat)).save(os.path.join(out_dir, f"{name}_yhat.png"))
+    Image.fromarray(_tensor_to_png_array(y)).save(os.path.join(tg_dir, f"{name}.png"))
+    Image.fromarray(_tensor_to_png_array(yhat)).save(os.path.join(pr_dir, f"{name}.png"))
 
 
 def main():
@@ -89,6 +120,11 @@ def main():
     ap.add_argument("--ckpt", type=str, required=True)
     ap.add_argument("--num_samples", type=int, default=20)
     ap.add_argument("--split", type=str, default="test")
+    ap.add_argument("--out_dir", type=str, default=None)
+    ap.add_argument("--fid_max_items", type=int, default=None)
+    ap.add_argument("--fid_batch_size", type=int, default=16)
+    ap.add_argument("--save_every", type=int, default=0, help="If >0, save standardized PNG triplets every N patches.")
+    ap.add_argument("--save_palette_every", type=int, default=0, help="If >0, save a palette preview every N patches.")
     args = ap.parse_args()
 
     cfg, cfg_dict = load_config(args.config)
@@ -99,7 +135,8 @@ def main():
     if not cfg.dataroot:
         raise ValueError("Config 'dataroot' is empty. Set SWINGAN_DATAROOT or edit config.")
 
-    out_dir = _get_env("SWINGAN_TEST_OUT", os.path.join(os.path.dirname(args.ckpt), "test_outputs"))
+    default_out_dir = os.path.join(os.path.dirname(args.ckpt), "test_outputs")
+    out_dir = args.out_dir or _get_env("SWINGAN_TEST_OUT", default_out_dir)
     os.makedirs(out_dir, exist_ok=True)
     try:
         shutil.copyfile(args.config, os.path.join(out_dir, "config.yaml"))
@@ -130,31 +167,66 @@ def main():
     G.load_state_dict(ckpt["G_state"], strict=True)
     G.eval()
 
-    psnrs = []
-    ssims = []
-    saved = 0
-    for batch in tqdm(loader, desc="Testing", unit="img"):
-        x = batch["x"].to(device=device, dtype=torch.float32)
-        y = batch["y"].to(device=device, dtype=torch.float32)
-        with torch.no_grad():
-            yhat = torch.tanh(G(x))
-        psnrs.append(psnr(y, yhat))
-        ssims.append(ssim_stub(y, yhat))
-        if saved < args.num_samples:
-            save_grid(out_dir, batch["name"][0], x[0], y[0], yhat[0])
-            save_pngs(out_dir, batch["name"][0], x[0], y[0], yhat[0], cfg.input_mode)
-            saved += 1
+    # Streaming inference + metrics (avoid saving every patch).
+    def _pairs():
+        saved = 0
+        buf5: list[tuple[str, torch.Tensor, torch.Tensor]] = []
+        for i, batch in enumerate(tqdm(loader, desc="Testing", unit="img")):
+            x = batch["x"].to(device=device, dtype=torch.float32)
+            y = batch["y"].to(device=device, dtype=torch.float32)
+            with torch.no_grad():
+                yhat = torch.tanh(G(x))
 
+            name = batch["name"][0]
+            buf5.append((name, y[0].detach().cpu(), yhat[0].detach().cpu()))
+            if len(buf5) > 5:
+                buf5.pop(0)
+
+            # Save only palettes (pred + target), in 5-row columns.
+            if saved < args.num_samples:
+                # Save once per 5 samples.
+                if len(buf5) == 5:
+                    save_palette5_pred_target_png(out_dir, f"{name}_{saved:03d}", list(buf5), filename_suffix="palette5")
+                    saved += 5
+
+            if args.save_palette_every and (i % int(args.save_palette_every) == 0) and len(buf5) == 5:
+                save_palette5_pred_target_png(out_dir, f"{name}_every{i}", list(buf5), filename_suffix="palette5_every")
+
+            if args.save_every and (i % int(args.save_every) == 0) and len(buf5) == 5:
+                save_palette5_pred_target_png(out_dir, f"{name}_save{i}", list(buf5), filename_suffix="palette5_save")
+
+            yield (y[0].detach(), yhat[0].detach())
+
+    res = compute_metrics_streaming(
+        pairs=_pairs(),
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        fid_max_items=args.fid_max_items,
+        fid_batch_size=int(args.fid_batch_size),
+    )
     summary = {
-        "psnr_mean": float(np.mean(psnrs)) if psnrs else None,
-        "psnr_std": float(np.std(psnrs)) if psnrs else None,
-        "ssim_mean": float(np.mean(ssims)) if ssims else None,
-        "ssim_std": float(np.std(ssims)) if ssims else None,
-        "n": len(psnrs),
+        "n": res.n,
+        "psnr_mean": res.psnr_mean,
+        "psnr_std": res.psnr_std,
+        "ssim_mean": res.ssim_mean,
+        "ssim_std": res.ssim_std,
+        "fid": res.fid,
     }
     with open(os.path.join(out_dir, "metrics.yaml"), "w") as f:
         yaml.safe_dump(summary, f)
-    print(summary)
+    with open(os.path.join(out_dir, "metrics.json"), "w") as f:
+        import json
+
+        json.dump(summary, f, indent=2)
+    print(
+        "MODE: EVAL | "
+        + " ".join(
+            [
+                f"PSNR_test: {summary['psnr_mean']:.3f}" if summary["psnr_mean"] is not None else "PSNR_test: nan",
+                f"SSIM_test: {summary['ssim_mean']:.3f}" if summary["ssim_mean"] is not None else "SSIM_test: nan",
+                f"FID_test: {summary['fid']:.3f}" if summary["fid"] is not None else "FID_test: nan",
+            ]
+        )
+    )
 
 
 if __name__ == "__main__":

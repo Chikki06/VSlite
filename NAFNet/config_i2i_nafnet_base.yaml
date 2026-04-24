@@ -1,0 +1,47 @@
+## NAFNet i2i for VSlite patches (IR/IR+VIS -> HE) — base (b)
+
+## Data
+# Set via env NAFNET_DATAROOT in job scripts.
+dataroot: ""
+input_mode: "ir10"            # "ir10" or "irvis13"
+num_ir_channels: 10
+img_size: 256
+he_scale: "minus1_1"          # "minus1_1" or "0_1"
+split: null                    # null/train-val split via hash
+split_seed: 1337
+split_fracs: [0.9, 0.05, 0.05]
+max_items: null
+
+## Output
+output_dir: "OUTPUT_PATH"
+
+## Model (NAFNet-style backbone)
+out_chans: 3
+use_cbam: false
+
+# NAFNet width/block schedule (defaults mirror upstream width64-ish compact settings)
+width: 32
+middle_blk_num: 1
+enc_blk_nums: [1, 1, 1, 28]
+dec_blk_nums: [1, 1, 1, 1]
+
+## Train
+device: "cuda"
+gpu_id: "0"
+epochs_n: 50
+batch_size: 6
+print_freq: 100
+lr: 0.0002
+weight_decay: 0.0
+beta1: 0.9
+beta2: 0.999
+lambda_l1: 1.0
+save_epoch_freq: 5
+train_num_workers: 16
+val_num_workers: 4
+use_amp: true
+grad_clip: 0.0
+
+## Perceptual / feature loss (disabled for base)
+lambda_perceptual: 0.0
+tcga_feature_ckpt: ""

@@ -1,4 +1,6 @@
-import torch
+import pytest
+
+torch = pytest.importorskip("torch")
 
 from SwinGAN.Networks.vision_transformer import ProjectedSwinUnet
 

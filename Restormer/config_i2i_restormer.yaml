@@ -1,0 +1,44 @@
+## Restormer i2i for VSlite patches (IR/IR+VIS -> HE)
+
+## Data
+# Set via env RESTORMER_DATAROOT in job scripts.
+dataroot: ""
+input_mode: "ir10"            # "ir10" or "irvis13"
+num_ir_channels: 10
+img_size: 256
+he_scale: "minus1_1"          # "minus1_1" or "0_1"
+split: null                    # null/train-val split via hash
+split_seed: 1337
+split_fracs: [0.9, 0.05, 0.05]
+max_items: null
+
+## Output
+output_dir: "OUTPUT_PATH"
+
+## Model (Restormer)
+dim: 48
+num_blocks: [4, 6, 6, 8]
+num_refinement_blocks: 4
+heads: [1, 2, 4, 8]
+ffn_expansion_factor: 2.66
+bias: false
+LayerNorm_type: "WithBias"
+# Keep this true for 10/13 -> 3 channel translation (avoids residual add with mismatched channels).
+dual_pixel_task: true
+
+## Train
+device: "cuda"
+gpu_id: "0"
+epochs_n: 50
+batch_size: 6
+print_freq: 100
+lr: 0.0002
+weight_decay: 0.0
+beta1: 0.9
+beta2: 0.999
+lambda_l1: 1.0
+save_epoch_freq: 5
+train_num_workers: 16
+val_num_workers: 4
+use_amp: true
+grad_clip: 0.0

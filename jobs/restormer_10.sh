@@ -1,1 +1,0 @@
-/u/akshahi2/jobs/restormer/train/restormer_10.sh

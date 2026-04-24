@@ -22,11 +22,28 @@ else:
     WANDB_AVAILBLE = True
 
 
+def _env_disables_wandb():
+    """Respect WANDB_MODE=disabled etc. even when opt.use_wandb is True (e.g. from opt.pkl)."""
+    mode = os.environ.get('WANDB_MODE', '').strip().lower()
+    return mode == 'disabled'
+
+
+def _numpy_ok_for_wandb_image(arr):
+    """wandb.Image supports 2D grayscale or HWC with 1/3/4 channels, not e.g. 13-ch IR stacks."""
+    if arr.ndim == 2:
+        return True
+    if arr.ndim == 3 and arr.shape[2] in (1, 3, 4):
+        return True
+    return False
+
+
 class Visualizer:
     def __init__(self, opt):
         self.opt = opt
         self.tf_log = opt.isTrain and (not opt.no_tf_log)
-        self.wandb_log = WANDB_AVAILBLE and opt.use_wandb
+        self.wandb_log = (
+            WANDB_AVAILBLE and opt.use_wandb and not _env_disables_wandb()
+        )
         self.use_json_log = opt.isTrain and (not opt.no_json_log)
         self.use_html = opt.isTrain and not opt.no_html
         self.win_size = opt.display_winsize
@@ -34,7 +51,7 @@ class Visualizer:
         self.wandb_run = None
         if self.tf_log:
             self.log_dir = os.path.join(opt.checkpoints_dir, opt.name, 'logs')
-        if WANDB_AVAILBLE and opt.use_wandb:
+        if self.wandb_log:
             self.wandb_run = wandb.init(
                 config=opt,
                 sync_tensorboard=(opt.wandb_job_type != 'eval' and (not opt.no_tf_log)),
@@ -51,6 +68,7 @@ class Visualizer:
             util.mkdirs([self.web_dir, self.img_dir])
         if opt.isTrain:
             self.log_name = os.path.join(opt.checkpoints_dir, opt.name, 'loss_log.txt')
+            os.makedirs(os.path.join(opt.checkpoints_dir, opt.name), exist_ok=True)
             with open(self.log_name, "a") as log_file:
                 now = time.strftime("%c")
                 log_file.write(
@@ -79,7 +97,7 @@ class Visualizer:
                     torch.from_numpy(image_numpy).permute(2, 0, 1),
                     global_step=step,
                 )
-            if self.wandb_log:
+            if self.wandb_log and _numpy_ok_for_wandb_image(image_numpy):
                 wandb.log({label: wandb.Image(image_numpy, caption=label)}, step=step)
 
         if self.use_html:  # save images to a html file
@@ -180,7 +198,7 @@ class Visualizer:
             comparison_op,
         )
         self.json_log.to_json()
-        if is_best and WANDB_AVAILBLE and self.opt.use_wandb:
+        if is_best and self.wandb_log:
             # wandb.run.summary['best_{}'.format(metric_name)] = (int(step), metric_val)
             wandb.run.summary['best_{}'.format(metric_name)] = metric_val
         return is_best
@@ -211,6 +229,12 @@ class Visualizer:
                 t = util.tensor2label(t, self.opt.label_nc + 2, tile=tile)
             else:
                 t = util.tensor2im(t, tile=tile)
+            # Some inputs (e.g. IR stacks) may have >4 channels after tensor2im.
+            # Down-project to 3 channels so PIL / html saving won't crash.
+            if hasattr(t, "shape") and len(getattr(t, "shape", ())) == 3:
+                c = t.shape[2]
+                if c not in (1, 3, 4):
+                    t = t[:, :, :3]
             visuals[key] = t
         return visuals
 

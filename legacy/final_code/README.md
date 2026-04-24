@@ -63,7 +63,7 @@ For COCO-Stuff, Cityscapes or ADE20K, the datasets must be downloaded beforehand
 
 **Preparing ADE20K Dataset**. The dataset can be downloaded [here](http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip), which is from [MIT Scene Parsing BenchMark](http://sceneparsing.csail.mit.edu/). After unzipping the datgaset, put the jpg image files `ADEChallengeData2016/images/` and png label files `ADEChallengeData2016/annotatoins/` in the same directory.
 
-There are different modes to load images by specifying `--preprocess_mode` along with `--load_size`. `--crop_size`. There are options such as `resize_and_crop`, which resizes the images into square images of side length `load_size` and randomly crops to `crop_size`. `scale_shortside_and_crop` scales the image to have a short side of length `load_size` and crops to `crop_size` x `crop_size` square. To see all modes, please use `python train.py --help` and take a look at `data/base_dataset.py`. By default at the training phase, the images are randomly flipped horizontally. To prevent this use `--no_flip`.
+There are different modes to load images by specifying `--preprocess_mode` along with `--load_size`. `--crop_size`. There are options such as `resize_and_crop`, which resizes the images into square images of side length `load_size` and randomly crops to `crop_size`. `scale_shortside_and_crop` scales the image to have a short side of length `load_size` and crops to `crop_size` x `crop_size` square. To see all modes, please use `python scripts/train.py --help` and take a look at `data/base_dataset.py`. By default at the training phase, the images are randomly flipped horizontally. To prevent this use `--no_flip`.
 
 ## Training Models
 
@@ -75,13 +75,13 @@ Models can be trained with the following steps.
 
 ```bash
 # To train on the COCO dataset, for example.
-python train.py --name [experiment_name] --dataset_mode coco --dataroot [path_to_coco_dataset]
+python scripts/train.py --name [experiment_name] --dataset_mode coco --dataroot [path_to_coco_dataset]
 
 # To train on your own custom dataset
-python train.py --name [experiment_name] --dataset_mode custom --label_dir [path_to_labels] --image_dir [path_to_images] --label_nc [num_labels]
+python scripts/train.py --name [experiment_name] --dataset_mode custom --label_dir [path_to_labels] --image_dir [path_to_images] --label_nc [num_labels]
 ```
 
-There are many options you can specify. Please use `python train.py --help`. The specified options are printed to the console. To specify the number of GPUs to utilize, use `--gpu_ids`. If you want to use the second and third GPUs for example, use `--gpu_ids 1,2`.
+There are many options you can specify. Please use `python scripts/train.py --help`. The specified options are printed to the console. To specify the number of GPUs to utilize, use `--gpu_ids`. If you want to use the second and third GPUs for example, use `--gpu_ids 1,2`.
 
 The training logs are stored in json format in `[checkpoints_dir]/[experiment_name]/log.json`, with sample generations populated in `[checkpoint_dir]/[experiment_name]/web`.
 We provide support for both Tensorboard (with `--tf_log`) and Weights & Biases (with `--use_wandb`) experiment tracking.
@@ -91,7 +91,7 @@ We provide support for both Tensorboard (with `--tf_log`) and Weights & Biases (
 In order to evaluate and visualize the generations of a trained model, run `test.py` in a similar manner, specifying the name of the experiment, the dataset and its path:
 
 ```bash
-python test.py --name [name_of_experiment] --dataset_mode [dataset_mode] --dataroot [path_to_dataset]
+python scripts/test.py --name [name_of_experiment] --dataset_mode [dataset_mode] --dataroot [path_to_dataset]
 ```
 
 where `[name_of_experiment]` is the directory name of the checkpoint created during training. If you are running on CPU mode, append `--gpu_ids -1`.
