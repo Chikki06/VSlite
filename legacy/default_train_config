@@ -1,7 +1,0 @@
-Batch size: 8 
-Crop size: 512x512 
-Load size: 1024 
-Model: Contrastive pix2pix with VGG19 feature extractor
-Number of patches: 1024 for contrastive learning
-Multiple discriminators: 2 discriminators
-NGF: 64 (generator feature channels)
