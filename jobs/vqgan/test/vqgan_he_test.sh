@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=vq_he_te
+#SBATCH --job-name=vq_he_b_te
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
 #SBATCH --gpus=1
@@ -20,7 +20,13 @@ export WANDB_MODE="disabled"
 
 DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
 RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs"
-NAME="${VQGAN_NAME:-vqgan_he}"
+VQGAN_VARIANT="${VQGAN_VARIANT:-default}"
+if [[ "$VQGAN_VARIANT" == "default" ]]; then
+  VQGAN_TAG="${VQGAN_TAG:-b}"
+else
+  VQGAN_TAG="${VQGAN_TAG:-$VQGAN_VARIANT}"
+fi
+NAME="${VQGAN_NAME:-vq_${VQGAN_TAG}}"
 CKPT="${VQGAN_CKPT:-vqgan_epoch_049.pt}"
 NUM_TEST="${NUM_TEST:-75000}"
 FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-75000}"
@@ -32,6 +38,9 @@ python scripts/test_vqgan_vs.py \
   --ckpt "$CKPT" \
   --input_nc 13 \
   --num_ir_channels 10 \
+  --image_size 512 \
+  --latent_grid_size "${VQGAN_LATENT_GRID:-16}" \
+  --num_codebook_vectors "${VQGAN_CODEBOOK:-4096}" \
   --num_test "$NUM_TEST" \
   --split "test" \
   --fid_max_items "$FID_MAX_ITEMS" \
@@ -45,6 +54,9 @@ python scripts/test_vqgan_vs.py \
   --ckpt "$CKPT" \
   --input_nc 13 \
   --num_ir_channels 10 \
+  --image_size 512 \
+  --latent_grid_size "${VQGAN_LATENT_GRID:-16}" \
+  --num_codebook_vectors "${VQGAN_CODEBOOK:-4096}" \
   --num_test "$NUM_TEST" \
   --split "train" \
   --fid_max_items "$FID_MAX_ITEMS" \

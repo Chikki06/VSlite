@@ -1,0 +1,43 @@
+------------ Options -------------
+ape: False
+batch_size: 32
+dataroot: 
+depths: [2, 2, 6, 2]
+device: cuda
+discriminator_variant: default
+drop_path_rate: 0.1
+drop_rate: 0.0
+embed_dim: 96
+epochs_n: 50
+gan_training: True
+gpu_id: 0
+he_scale: minus1_1
+img_size: 512
+input_mode: ir10
+lambda_gan: 1.0
+lambda_l1: 100.0
+lambda_perceptual: 10.0
+lr_d: 0.0002
+lr_g: 0.0002
+max_items: None
+mlp_ratio: 4.0
+num_heads: [3, 6, 12, 24]
+num_ir_channels: 10
+output_dir: OUTPUT_PATH
+patch_norm: True
+patch_size: 4
+pretrained_swin_ckpt: /projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN/pretrained_ckpt/swin_tiny_patch4_window7_224.pth
+print_freq: 100
+qk_scale: None
+qkv_bias: True
+split: None
+split_fracs: [0.9, 0.05, 0.05]
+split_seed: 1337
+tcga_feature_ckpt: /projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5
+train_num_workers: 16
+use_cbam: True
+use_checkpoint: False
+use_perceptual: True
+val_num_workers: 4
+window_size: 8
+-------------- End ----------------

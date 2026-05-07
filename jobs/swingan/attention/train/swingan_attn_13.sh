@@ -22,8 +22,14 @@ export SWINGAN_GPU_ID="0"
 export OMP_NUM_THREADS="4"
 export MKL_NUM_THREADS="4"
 
+# Unified eval caps (controls overhead of epoch-end split evaluation).
+export UNIFIED_EVAL_MAX_ITEMS_TRAIN="${UNIFIED_EVAL_MAX_ITEMS_TRAIN:-512}"
+export UNIFIED_EVAL_MAX_ITEMS_VAL="${UNIFIED_EVAL_MAX_ITEMS_VAL:-512}"
+export UNIFIED_EVAL_MAX_ITEMS_TEST="${UNIFIED_EVAL_MAX_ITEMS_TEST:-512}"
+
 export SWINGAN_INPUT_MODE="irvis13"
-export SWINGAN_OUTPUT_DIR="${VSLITE_DIR}/results/swingan_i2i/a13"
+SWINGAN_RUN_TAG="a13"
+export SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan_i2i/${SWINGAN_RUN_TAG}}"
 CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_attention.yaml"
 
 python train_i2i.py --config "$CONFIG_PATH"

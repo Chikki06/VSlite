@@ -40,10 +40,12 @@ def print_memory_usage():
             memory_cached = torch.cuda.memory_reserved(i) / 1024**3  # GB
             print(f"GPU {i}: Allocated: {memory_allocated:.2f}GB, Cached: {memory_cached:.2f}GB")
 
-os.makedirs('images/', exist_ok=True)
-
 # Parse options
 opt = TrainOptions().parse()
+
+# Legacy debug outputs: keep them under the experiment checkpoint folder, not repo-root.
+_debug_dir = os.path.join(opt.checkpoints_dir, opt.name, "debug_npys")
+os.makedirs(_debug_dir, exist_ok=True)
 
 # Memory optimization: Force smaller settings for tight memory constraints
 print(f"Original settings - batch_size: {opt.batch_size}, crop_size: {opt.crop_size}, num_patches: {opt.num_patches}")
@@ -160,12 +162,19 @@ try:
             if iter_counter.needs_displaying():
                 # Save images but with memory management
                 with torch.no_grad():
-                    np.save('images/target_'+str(iter_counter.total_steps_so_far)+'.npy',
-                           data_i['target'].data.cpu().numpy())
-                    np.save('images/input_'+str(iter_counter.total_steps_so_far)+'.npy',
-                           data_i['input'].data.cpu().numpy())
-                    np.save('images/gen_'+str(iter_counter.total_steps_so_far)+'.npy',
-                           trainer.get_latest_generated().data.cpu().numpy())
+                    step = str(iter_counter.total_steps_so_far)
+                    np.save(
+                        os.path.join(_debug_dir, 'target_' + step + '.npy'),
+                        data_i['target'].data.cpu().numpy(),
+                    )
+                    np.save(
+                        os.path.join(_debug_dir, 'input_' + step + '.npy'),
+                        data_i['input'].data.cpu().numpy(),
+                    )
+                    np.save(
+                        os.path.join(_debug_dir, 'gen_' + step + '.npy'),
+                        trainer.get_latest_generated().data.cpu().numpy(),
+                    )
 
             if iter_counter.needs_saving():
                 print(f'saving the latest model (epoch {epoch}, total_steps {iter_counter.total_steps_so_far})')

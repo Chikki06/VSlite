@@ -1,0 +1,37 @@
+------------ Options -------------
+LayerNorm_type: WithBias
+batch_size: 1
+beta1: 0.9
+beta2: 0.999
+bias: False
+dataroot: 
+device: cuda
+dim: 48
+dual_pixel_task: True
+epochs_n: 50
+ffn_expansion_factor: 2.66
+gpu_id: 0
+grad_clip: 0.0
+he_scale: minus1_1
+heads: [1, 2, 4, 8]
+img_size: 512
+input_mode: ir10
+lambda_l1: 1.0
+lambda_perceptual: 10.0
+lr: 0.0002
+max_items: None
+num_blocks: [4, 6, 6, 8]
+num_ir_channels: 10
+num_refinement_blocks: 4
+output_dir: OUTPUT_PATH
+print_freq: 100
+save_epoch_freq: 5
+split: None
+split_fracs: [0.9, 0.05, 0.05]
+split_seed: 1337
+tcga_feature_ckpt: /projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5
+train_num_workers: 16
+use_amp: True
+val_num_workers: 4
+weight_decay: 0.0
+-------------- End ----------------

@@ -1,0 +1,9 @@
+fid: 5.111101878623629
+n: 66976
+pred_dir: /projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline/test/vs13/patch_eval_train/pred
+psnr_mean: 18.17014726139294
+psnr_std: 3.562082041727095
+split: train
+ssim_mean: 0.4268899327632938
+ssim_std: 0.18550049375762853
+target_dir: /projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline/test/vs13/patch_eval_train/target

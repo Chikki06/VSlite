@@ -22,11 +22,17 @@ _VSLITE_ROOT = _THIS_DIR.parent
 if str(_VSLITE_ROOT) not in sys.path:
     sys.path.insert(0, str(_VSLITE_ROOT))
 
-from Networks.discriminator_model import PatchGAN
 from Networks.vision_transformer import ProjectedSwinUnet
 from loss_i2i import GANLoss, ConvNeXtFeatureExtractor
 from utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
-from utils.sample_saver import save_sample_palette_png, save_sample_pngs
+from util.atomic_io import atomic_torch_save
+from util.fixed_preview import gather_fixed_preview_batch
+from util.run_logger import RunLogger
+from util.sample_grid import save_unified_sample, split_batch_to_list
+from util.save_schedule import make_iter_schedule
+from util.unified_tb import build_unified_writer
+from util.eval_caps import eval_max_items_train, eval_max_items_val, eval_max_items_test
+from models.networks.discriminator import NLayerDiscriminator
 
 
 logger = logging.getLogger(__name__)
@@ -53,6 +59,59 @@ def load_config(path: str):
 def build_split_fracs(cfg):
     fr = getattr(cfg, "split_fracs", [0.9, 0.05, 0.05])
     return SplitFractions(train=float(fr[0]), val=float(fr[1]), test=float(fr[2]))
+
+
+def _dataloader_kwargs(num_workers: int, device: torch.device) -> dict:
+    """Pin memory + worker settings tuned to reduce **host RAM** spikes on HPC.
+
+    Default PyTorch ``prefetch_factor=2`` with many workers multiplies resident
+    memory (each worker queues full batches of large 512² tensors). A separate
+    preview pass must not use the long-lived val ``DataLoader`` or it spawns
+    val workers for the entire training epoch alongside train workers.
+    """
+    nw = max(0, int(num_workers))
+    kwargs: dict = {"pin_memory": device.type == "cuda"}
+    if nw > 0:
+        kwargs["num_workers"] = nw
+        kwargs["persistent_workers"] = True
+        kwargs["prefetch_factor"] = 1
+    return kwargs
+
+
+def build_discriminator(cfg):
+    disc_variant = str(getattr(cfg, "discriminator_variant", "default")).strip().lower()
+    if disc_variant not in {"default", "patchd"}:
+        raise ValueError(
+            f"Unsupported discriminator_variant='{disc_variant}'. "
+            "Expected one of: default, patchd"
+        )
+    # Use the baseline pix2pix discriminator implementation (PatchGAN).
+    # Configure it to return a single logits tensor (not intermediate feature lists),
+    # so downstream GANLoss keeps working unchanged.
+    dopt = SimpleNamespace(
+        ndf=int(getattr(cfg, "ndf", 64)),
+        n_layers_D=int(getattr(cfg, "n_layers_D", 4)),
+        norm_D=str(getattr(cfg, "norm_D", "spectralinstance")),
+        no_ganFeat_loss=True,
+        # Baseline option schema fields (not used for D input nc in this repo).
+        label_nc=0,
+        output_nc=3,
+        contain_dontcare_label=False,
+        no_instance=True,
+    )
+    return NLayerDiscriminator(dopt)
+
+
+def _subset_indices(n: int, max_items: int, seed: int) -> list[int]:
+    if max_items <= 0 or n <= 0:
+        return []
+    m = min(n, int(max_items))
+    # Deterministic pseudo-random subset without importing extra RNG state.
+    # Spread picks across the dataset to reduce ordering bias.
+    step = max(1, n // m)
+    start = int(seed) % max(1, step)
+    idx = list(range(start, n, step))[:m]
+    return idx
 
 
 @torch.no_grad()
@@ -90,6 +149,10 @@ def main():
     cfg.input_mode = _get_env("SWINGAN_INPUT_MODE", getattr(cfg, "input_mode", "ir10"))
     cfg.gpu_id = _get_env("SWINGAN_GPU_ID", getattr(cfg, "gpu_id", "0"))
     cfg.batch_size = int(_get_env("SWINGAN_BATCH_SIZE", getattr(cfg, "batch_size", 4)))
+    cfg.discriminator_variant = _get_env(
+        "SWINGAN_DISC_VARIANT",
+        getattr(cfg, "discriminator_variant", "default"),
+    )
     cfg.train_num_workers = int(
         _get_env("SWINGAN_TRAIN_NUM_WORKERS", getattr(cfg, "train_num_workers", 4))
     )
@@ -150,17 +213,13 @@ def main():
         train_ds,
         batch_size=int(cfg.batch_size),
         shuffle=True,
-        num_workers=int(cfg.train_num_workers),
-        pin_memory=(device.type == "cuda"),
-        persistent_workers=int(cfg.train_num_workers) > 0,
+        **_dataloader_kwargs(int(cfg.train_num_workers), device),
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=int(cfg.batch_size),
         shuffle=False,
-        num_workers=int(cfg.val_num_workers),
-        pin_memory=(device.type == "cuda"),
-        persistent_workers=int(cfg.val_num_workers) > 0,
+        **_dataloader_kwargs(int(cfg.val_num_workers), device),
     )
 
     in_chans = 10 if cfg.input_mode == "ir10" else 13
@@ -189,7 +248,7 @@ def main():
     else:
         logger.warning("No pretrained_swin_ckpt provided; training from scratch.")
 
-    D = PatchGAN(input_nc=3, crop_center=int(getattr(cfg, "crop_center", 128))).to(device)
+    D = build_discriminator(cfg).to(device)
 
     optG = torch.optim.Adam(G.parameters(), lr=float(cfg.lr_g), betas=(0.5, 0.999))
     optD = torch.optim.Adam(D.parameters(), lr=float(cfg.lr_d), betas=(0.5, 0.999))
@@ -199,6 +258,11 @@ def main():
     perceptual = ConvNeXtFeatureExtractor(opt=cfg).to(device) if use_perc else None
 
     writer = SummaryWriter(log_dir=os.path.join(cfg.output_dir, "tensorboard"))
+    run_logger = RunLogger(str(cfg.output_dir), name=os.path.basename(os.path.abspath(cfg.output_dir)))
+    run_logger.dump_opts(cfg_dict)
+    # Unified TensorBoard under repo-root results/unified/.
+    run_name = os.path.basename(os.path.abspath(cfg.output_dir))
+    u_writer, u_tb = build_unified_writer(model="swingan_i2i", run=run_name)
 
     use_tqdm = tqdm is not None and sys.stderr.isatty()
     bs = int(cfg.batch_size)
@@ -228,6 +292,81 @@ def main():
         )
 
     sample_dir = os.path.join(cfg.output_dir, "samples")
+    os.makedirs(sample_dir, exist_ok=True)
+    # Eval subset sizes (overhead control). Defaults are conservative.
+    eval_seed = int(getattr(cfg, "split_seed", 1337))
+    eval_train_max = int(eval_max_items_train(getattr(cfg, "eval_max_items_train", 512)))
+    eval_val_max = int(eval_max_items_val(getattr(cfg, "eval_max_items_val", 512)))
+    eval_test_max = int(eval_max_items_test(getattr(cfg, "eval_max_items_test", 512)))
+
+    test_ds = VSLiteI2IDataset(
+        cfg.dataroot,
+        input_mode=cfg.input_mode,
+        num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
+        img_size=int(getattr(cfg, "img_size", 256)),
+        he_scale=str(getattr(cfg, "he_scale", "minus1_1")),
+        split="test" if getattr(cfg, "split", None) else None,
+        split_seed=int(getattr(cfg, "split_seed", 1337)),
+        split_fracs=split_fracs,
+        max_items=getattr(cfg, "max_items", None),
+    )
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=int(cfg.batch_size),
+        shuffle=False,
+        **_dataloader_kwargs(int(cfg.val_num_workers), device),
+    )
+
+    # Deterministic eval subset for train (and optionally val/test if you want to cap them).
+    train_eval_ds = VSLiteI2IDataset(
+        cfg.dataroot,
+        input_mode=cfg.input_mode,
+        num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
+        img_size=int(getattr(cfg, "img_size", 256)),
+        he_scale=str(getattr(cfg, "he_scale", "minus1_1")),
+        split="train" if getattr(cfg, "split", None) else None,
+        split_seed=int(getattr(cfg, "split_seed", 1337)),
+        split_fracs=split_fracs,
+        max_items=getattr(cfg, "max_items", None),
+        indices=_subset_indices(len(train_ds), eval_train_max, eval_seed),
+    )
+    train_eval_loader = DataLoader(
+        train_eval_ds,
+        batch_size=int(cfg.batch_size),
+        shuffle=False,
+        **_dataloader_kwargs(int(cfg.val_num_workers), device),
+    )
+
+    # 8 fixed preview samples (deterministic) for the unified composite saver.
+    # Use a dedicated single-process loader so we do not spawn ``val_loader``
+    # workers here; keeping val workers alive for all of training alongside train
+    # workers roughly doubles DataLoader RSS on large-patch runs (Slurm OOM).
+    _preview_bs = min(int(cfg.batch_size), 8) if int(cfg.batch_size) > 0 else 1
+    preview_loader = DataLoader(
+        val_ds,
+        batch_size=max(1, _preview_bs),
+        shuffle=False,
+        pin_memory=False,
+    )
+    fixed_preview = gather_fixed_preview_batch(preview_loader, n=8)
+    total_iters = max(1, int(total_epochs) * int(len(train_loader)))
+    should_save_image = make_iter_schedule(total_iters, target_saves=50)
+
+    @torch.no_grad()
+    def _save_unified_preview(epoch_idx: int, step_idx: int) -> None:
+        if fixed_preview is None:
+            return
+        was_train = G.training
+        G.eval()
+        x_fp = fixed_preview["x"].to(device=device, dtype=torch.float32)
+        y_fp = fixed_preview["y"].to(device=device, dtype=torch.float32)
+        y_hat_fp = torch.tanh(G(x_fp))
+        reals = split_batch_to_list(y_fp.detach().cpu())[:8]
+        preds = split_batch_to_list(y_hat_fp.detach().cpu())[:8]
+        name = f"epoch{int(epoch_idx) + 1:03d}_step{int(step_idx):09d}"
+        save_unified_sample(sample_dir, name, reals, preds, input_mode=cfg.input_mode)
+        if was_train:
+            G.train()
 
     for epoch in range(start_epoch, total_epochs):
         G.train()
@@ -235,7 +374,6 @@ def main():
 
         epoch_start_time = time.time()
         last_iter_time = time.time()
-        last_preview = None
         loader_iter = train_loader
         if use_tqdm:
             loader_iter = tqdm(
@@ -280,7 +418,6 @@ def main():
             writer.add_scalar("train/g_l1", float(g_l1.item()), global_step)
             writer.add_scalar("train/g_gan", float(g_gan.item()), global_step)
             writer.add_scalar("train/g_perc", float(g_perc.item()), global_step)
-            last_preview = (x[:1].detach(), y[:1].detach(), y_hat[:1].detach())
 
             if use_tqdm:
                 loader_iter.set_postfix(
@@ -313,16 +450,43 @@ def main():
                     float(g_gan.item()),
                     float(g_perc.item()),
                 )
+                run_logger.append_loss(
+                    epoch=epoch + 1,
+                    step=epoch_iters,
+                    losses={
+                        "D": float(d_loss.item()),
+                        "G": float(g_loss.item()),
+                        "G_L1": float(g_l1.item()),
+                        "G_GAN": float(g_gan.item()),
+                        "G_perc": float(g_perc.item()),
+                    },
+                    lr=lr_g,
+                    time_per_iter=time_per_img,
+                )
+
+            if should_save_image(global_step - 1):
+                _save_unified_preview(epoch, global_step)
+                run_logger.write_iter(epoch + 1, global_step)
 
         epoch_sec = int(time.time() - epoch_start_time)
+        train_l1 = validate(G, train_eval_loader, device, l1)
         val_l1 = validate(G, val_loader, device, l1)
+        test_l1 = validate(G, test_loader, device, l1)
+
         writer.add_scalar("val/l1", float(val_l1), epoch)
+        # Unified: log all three splits under consistent tags.
+        u_writer.add_scalar("l1/train", float(train_l1), epoch)
+        u_writer.add_scalar("l1/val", float(val_l1), epoch)
+        u_writer.add_scalar("l1/test", float(test_l1), epoch)
+        u_writer.add_scalar("meta/epoch_sec", float(epoch_sec), epoch)
         logger.info(
-            "End of epoch %d / %d \t Time Taken: %d sec \t val_l1: %.6f",
+            "End of epoch %d / %d \t Time Taken: %d sec \t train_l1: %.6f \t val_l1: %.6f \t test_l1: %.6f",
             epoch + 1,
             total_epochs,
             epoch_sec,
+            float(train_l1),
             float(val_l1),
+            float(test_l1),
         )
 
         ckpt = {
@@ -336,32 +500,17 @@ def main():
         }
         # Keep a stable filename so downstream jobs can reference a predictable path
         # (e.g., $SWINGAN_OUTPUT_DIR/ckpt_latest.pth).
-        torch.save(ckpt, os.path.join(cfg.output_dir, "ckpt_latest.pth"))
+        atomic_torch_save(torch.save, ckpt, os.path.join(cfg.output_dir, "ckpt_latest.pth"))
         if (epoch + 1) % save_epoch_freq == 0 or (epoch + 1) == total_epochs:
-            torch.save(ckpt, os.path.join(cfg.output_dir, f"ckpt_epoch{epoch+1}.pth"))
+            atomic_torch_save(torch.save, ckpt, os.path.join(cfg.output_dir, f"ckpt_epoch{epoch+1}.pth"))
             logger.info("Saved checkpoint epoch %d", epoch + 1)
 
-        if last_preview is not None:
-            preview_name = f"epoch{epoch + 1:03d}"
-            save_sample_pngs(
-                sample_dir,
-                preview_name,
-                last_preview[0],
-                last_preview[1],
-                last_preview[2],
-                cfg.input_mode,
-            )
-            save_sample_palette_png(
-                sample_dir,
-                preview_name,
-                last_preview[0],
-                last_preview[1],
-                last_preview[2],
-                cfg.input_mode,
-            )
-            logger.info("Saved training preview images: %s", preview_name)
+        # End-of-epoch composite save (always, even if the iter schedule didn't fire).
+        _save_unified_preview(epoch, global_step)
+        run_logger.write_iter(epoch + 1, global_step)
 
     writer.close()
+    u_writer.close()
 
 
 if __name__ == "__main__":

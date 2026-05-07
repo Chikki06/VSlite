@@ -2,7 +2,7 @@
 #SBATCH --job-name=b_inf
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
-#SBATCH --mem=40G
+#SBATCH --mem=64G
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=4
 #SBATCH --time=08:00:00

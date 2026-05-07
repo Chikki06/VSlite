@@ -19,7 +19,7 @@ export PYTHONUNBUFFERED=1
 VSLITE_ROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 DATAROOT="$VSLITE_ROOT/dataset/data_frozen"
 CONFIG_FILE="$VSLITE_ROOT/Restormer/config_i2i_restormer.yaml"
-OUTPUT_DIR="$VSLITE_ROOT/results/restormer_i2i/base10"
+OUTPUT_DIR="$VSLITE_ROOT/results/restormer_i2i/b10"
 
 export RESTORMER_DATAROOT="$DATAROOT"
 export RESTORMER_OUTPUT_DIR="$OUTPUT_DIR"
@@ -31,9 +31,9 @@ if [[ ! -f "$CKPT_PATH" ]]; then
 fi
 
 WSI_PARENT="${VSLITE_ROOT}/input/IR"
-TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/restormer_base_10"
+TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/b10"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
-NUM_TEST="${NUM_TEST:-50000}"
+NUM_TEST="${NUM_TEST:-75000}"
 
 mkdir -p "$PRED_WSI_DIR"
 
@@ -60,18 +60,18 @@ python "$VSLITE_ROOT/Restormer/test_i2i_restormer.py" \
   --ckpt "$CKPT_PATH" \
   --split "test" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \
-  --out_dir "${TEST_ROOT}/patch_eval"
+  --out_dir "${TEST_ROOT}/patch_eval_test"
 
 python "$VSLITE_ROOT/Restormer/test_i2i_restormer.py" \
   --config "$CONFIG_FILE" \
   --ckpt "$CKPT_PATH" \
   --split "train" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \

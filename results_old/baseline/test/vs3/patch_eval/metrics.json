@@ -1,0 +1,11 @@
+{
+  "n": 66976,
+  "psnr_mean": 17.072816485839432,
+  "psnr_std": 3.308599489722426,
+  "ssim_mean": 0.37759130998269635,
+  "ssim_std": 0.1781912529433677,
+  "fid": 5.2377305454175485,
+  "pred_dir": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline/test/vs3/patch_eval/pred",
+  "target_dir": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline/test/vs3/patch_eval/target",
+  "split": "test"
+}

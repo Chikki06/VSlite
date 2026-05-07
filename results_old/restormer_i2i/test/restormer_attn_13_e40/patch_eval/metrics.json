@@ -1,0 +1,10 @@
+{
+  "n": 3322,
+  "psnr_mean": 20.342113732608393,
+  "psnr_std": 3.7002482312415186,
+  "ssim_mean": 0.47820420162881233,
+  "ssim_std": 0.19682626044759025,
+  "fid": 25.269436882565287,
+  "ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/restormer_i2i/a13/ckpt_epoch40.pth",
+  "split": "test"
+}

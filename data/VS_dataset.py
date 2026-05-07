@@ -6,11 +6,13 @@ Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses
 from data.base_dataset import BaseDataset, get_params, get_transform
 from PIL import Image
 import util.util as util
+import math
 import os
 import numpy as np
 import torchvision.transforms as transforms
 import torch
 import random
+import hashlib
 from data.AffineT import *
 import spectral
 import tifffile as tif
@@ -132,9 +134,11 @@ class RGBaug:
         if gamma:
             transforms.append(A.RandomGamma(gamma_limit=gamma_limit, p=.5))
         
-        # Apply Gaussian noise
+        # Apply Gaussian noise (albumentations >=1.4: std_range is std as fraction of dtype max)
         if noise:
-            transforms.append(A.GaussNoise(var_limit=(0, noise_var_max), p=0.5))
+            v = max(0.0, float(noise_var_max))
+            std_hi = min(1.0, math.sqrt(v) / 255.0) if v > 0 else 0.0
+            transforms.append(A.GaussNoise(std_range=(0.0, std_hi), p=0.5))
         
         # Apply blurring
         if blur:
@@ -199,6 +203,35 @@ class VSDataset(BaseDataset):
             help='Optional comma-separated list of IR channel indices to select (e.g. "0,8,9"). '
             'If set, overrides --num_ir_channels slicing.',
         )
+        parser.add_argument(
+            '--test_list_path',
+            type=str,
+            default='',
+            help='Optional path to newline-separated sample ids (test.txt). '
+            'If not set, will use dataroot/test.txt if present. '
+            'Patches are assigned by sample prefix in <sample>_<y>_<x>.',
+        )
+        parser.add_argument(
+            '--val_list_path',
+            type=str,
+            default='',
+            help='Optional path to newline-separated sample ids (val.txt). '
+            'If not set, will use dataroot/val.txt if present. '
+            'Used only when phase==val. Samples in test.txt always take precedence.',
+        )
+        parser.add_argument(
+            '--split_seed',
+            type=int,
+            default=1337,
+            help='Seed for deterministic train/val split on non-test samples.',
+        )
+        parser.add_argument(
+            '--split_fracs',
+            type=str,
+            default='0.9,0.05,0.05',
+            help='Comma-separated split fractions train,val,test. '
+            'When test.txt exists, test fraction is controlled by that file; the remaining (train+val) ratio is used.',
+        )
         return parser
 
     def initialize(self, opt):
@@ -225,6 +258,149 @@ class VSDataset(BaseDataset):
         IR = IR[: opt.max_dataset_size]
         VIS = VIS[: opt.max_dataset_size]
         HE = HE[: opt.max_dataset_size]
+
+        # Optional: fixed test split based on sample ids from test.txt.
+        # - opt.phase == "test": keep only patches from test samples
+        # - otherwise (train/val): exclude all patches from test samples
+        test_list_path = str(getattr(opt, "test_list_path", "") or "").strip()
+        if test_list_path == "":
+            candidate = os.path.join(opt.dataroot, "test.txt")
+            test_list_path = candidate if os.path.isfile(candidate) else ""
+
+        test_samples = None
+        if test_list_path != "" and os.path.isfile(test_list_path):
+            exact = set()
+            prefixes = set()
+            with open(test_list_path, "r", encoding="utf-8") as f:
+                for raw in f.read().splitlines():
+                    s = raw.strip()
+                    if not s or s.startswith("#"):
+                        continue
+                    if "-" in s:
+                        exact.add(s)
+                    else:
+                        prefixes.add(s)
+            if len(exact) == 0 and len(prefixes) == 0:
+                test_samples = None
+            else:
+                test_samples = (exact, sorted(prefixes))
+
+        if test_samples is not None:
+            phase = str(getattr(opt, "phase", "train") or "train").strip().lower()
+
+            def _sample_id_from_path(p: str) -> str:
+                base = os.path.splitext(os.path.basename(p))[0]
+                return base.split("_", 1)[0]
+
+            exact, prefixes = test_samples
+
+            def _in_test(sid: str) -> bool:
+                if sid in exact:
+                    return True
+                for pfx in prefixes:
+                    if sid.startswith(pfx):
+                        return True
+                return False
+
+            keep_idx = []
+            for i, p in enumerate(IR):
+                sid = _sample_id_from_path(p)
+                in_test = _in_test(sid)
+                if (phase == "test" and in_test) or (phase != "test" and not in_test):
+                    keep_idx.append(i)
+
+            IR = [IR[i] for i in keep_idx]
+            VIS = [VIS[i] for i in keep_idx]
+            HE = [HE[i] for i in keep_idx]
+
+        # Validation split:
+        # - If val.txt exists (or --val_list_path), use it to define *val by sample id/prefix*.
+        # - Otherwise fall back to deterministic hash subset of non-test samples.
+        # This keeps:
+        #   - train: all non-test and non-val samples
+        #   - val: val-listed samples (or hash-subset if no list)
+        #   - test: test-listed samples
+        phase = str(getattr(opt, "phase", "train") or "train").strip().lower()
+        if phase in {"train", "val"}:
+            # Load val list if present.
+            val_list_path = str(getattr(opt, "val_list_path", "") or "").strip()
+            if val_list_path == "":
+                candidate = os.path.join(opt.dataroot, "val.txt")
+                val_list_path = candidate if os.path.isfile(candidate) else ""
+
+            val_samples = None
+            if val_list_path != "" and os.path.isfile(val_list_path):
+                v_exact = set()
+                v_prefixes = set()
+                with open(val_list_path, "r", encoding="utf-8") as f:
+                    for raw in f.read().splitlines():
+                        s = raw.strip()
+                        if not s or s.startswith("#"):
+                            continue
+                        if "-" in s:
+                            v_exact.add(s)
+                        else:
+                            v_prefixes.add(s)
+                if len(v_exact) == 0 and len(v_prefixes) == 0:
+                    val_samples = None
+                else:
+                    val_samples = (v_exact, sorted(v_prefixes))
+
+            if val_samples is not None:
+                def _sample_id_from_path(p: str) -> str:
+                    base = os.path.splitext(os.path.basename(p))[0]
+                    return base.split("_", 1)[0]
+
+                v_exact, v_prefixes = val_samples
+
+                def _in_val(sid: str) -> bool:
+                    if sid in v_exact:
+                        return True
+                    for pfx in v_prefixes:
+                        if sid.startswith(pfx):
+                            return True
+                    return False
+
+                keep_idx = []
+                for i, p in enumerate(IR):
+                    sid = _sample_id_from_path(p)
+                    in_val = _in_val(sid)
+                    if (phase == "val" and in_val) or (phase == "train" and not in_val):
+                        keep_idx.append(i)
+                IR = [IR[i] for i in keep_idx]
+                VIS = [VIS[i] for i in keep_idx]
+                HE = [HE[i] for i in keep_idx]
+            elif phase == "val":
+                # Fallback: deterministic hash split when no val.txt is provided.
+                # Parse split_fracs.
+                raw_fracs = str(getattr(opt, "split_fracs", "0.9,0.05,0.05") or "0.9,0.05,0.05")
+                try:
+                    parts = [float(x.strip()) for x in raw_fracs.split(",")]
+                    if len(parts) != 3:
+                        raise ValueError
+                    f_train, f_val, _f_test = parts
+                except Exception:
+                    f_train, f_val, _f_test = 0.9, 0.05, 0.05
+                tv = float(f_train + f_val)
+                # avoid div-by-zero; fall back to 95/5
+                train_cut = float(f_train) / tv if tv > 1e-9 else 0.95
+                seed = int(getattr(opt, "split_seed", 1337))
+
+                def _hash01(s: str) -> float:
+                    h = hashlib.sha256(f"{seed}:{s}".encode("utf-8")).hexdigest()
+                    return int(h[:8], 16) / float(0xFFFFFFFF)
+
+                keep_idx = []
+                for i, p in enumerate(IR):
+                    # use basename (stable across machines) rather than full path
+                    key = os.path.basename(p)
+                    r = _hash01(key)
+                    bucket = "train" if r < train_cut else "val"
+                    if bucket == "val":
+                        keep_idx.append(i)
+                IR = [IR[i] for i in keep_idx]
+                VIS = [VIS[i] for i in keep_idx]
+                HE = [HE[i] for i in keep_idx]
 
         transform = A.Compose([
             A.HorizontalFlip(p=0.5),
@@ -293,7 +469,14 @@ class VSDataset(BaseDataset):
             ir_data = np.clip(ir_data, 0, 5)
             img = ir_data
 
-            target_size = (1024, 1024)
+            # Resize patches to a configurable size (defaults to historical 1024).
+            # Several training scripts (e.g. VQGAN) expect smaller patches like 256.
+            sz = getattr(self.opt, 'image_size', 1024)
+            try:
+                sz_int = int(sz)
+            except Exception:
+                sz_int = 1024
+            target_size = (sz_int, sz_int)
 
             # Resize all channels in one call (much faster than per-channel Python loops).
             img_upsampled = cv2.resize(img, target_size, interpolation=cv2.INTER_CUBIC)

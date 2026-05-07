@@ -5,7 +5,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --time=12:00:00
+#SBATCH --time=20:00:00
 #SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
@@ -23,7 +23,7 @@ RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline"
 WHICH_EPOCH="latest"
 # Default to 75k patches (override: NUM_TEST=0 for full split; NUM_TEST=100 for quick debug)
 NUM_TEST="${NUM_TEST:-75000}"
-# Cap Inception/FID compute cost; PSNR/SSIM still use all saved pairs.
+# Cap Inception/FID compute cost (PSNR/SSIM still use all evaluated pairs).
 FID_MAX_NUM_SAMPLES="75000"
 GPU_ID="0"
 NAME="vs13"

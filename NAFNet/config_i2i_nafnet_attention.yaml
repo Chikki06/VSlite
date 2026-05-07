@@ -7,7 +7,7 @@ input_mode: "ir10"            # "ir10" or "irvis13"
 num_ir_channels: 10
 img_size: 256
 he_scale: "minus1_1"          # "minus1_1" or "0_1"
-split: null                    # null/train-val split via hash
+split: "train"                 # enable deterministic train/val/test split (uses dataroot/test.txt and dataroot/val.txt if present)
 split_seed: 1337
 split_fracs: [0.9, 0.05, 0.05]
 max_items: null

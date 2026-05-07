@@ -8,7 +8,95 @@ from PIL import Image
 from scipy import linalg
 from torch.utils.data import DataLoader, Dataset
 
-from models.inception import InceptionV3
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+def _default_convnext_fid_ckpt() -> str:
+    # Canonical HE-trained ConvNeXt feature checkpoint used in this repo (see diffusion configs).
+    return "/projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_feature.pt"
+
+
+class _ConvNeXtTinyFID(nn.Module):
+    """
+    ConvNeXt-Tiny feature extractor for Frechet distance on H&E realism.
+
+    - Uses timm convnext_tiny backbone.
+    - Loads TCGA/H&E feature checkpoint when available (recommended).
+    - Produces a (B, 768) feature vector via global average pooling.
+    """
+
+    def __init__(self, *, ckpt_path: str | None = None):
+        super().__init__()
+        try:
+            import timm  # local import: timm is an optional dependency in some envs
+        except Exception as e:
+            raise RuntimeError(
+                "ConvNeXt FID requires `timm` to be installed in the environment."
+            ) from e
+
+        self.backbone = timm.create_model("timm/convnext_tiny.in12k_ft_in1k")
+        # Ensure classifier head isn't used (we only need features).
+        if hasattr(self.backbone, "head") and hasattr(self.backbone.head, "fc"):
+            self.backbone.head.fc = nn.Identity()
+
+        ckpt = (ckpt_path or "").strip() if ckpt_path is not None else ""
+        if not ckpt:
+            ckpt = os.environ.get("VSLITE_CONVNEXT_FID_CKPT", "").strip() or _default_convnext_fid_ckpt()
+
+        if not os.path.isfile(ckpt):
+            raise FileNotFoundError(
+                f"ConvNeXt FID checkpoint not found: {ckpt}. "
+                "Set env var VSLITE_CONVNEXT_FID_CKPT to a valid .pt/.pth file."
+            )
+
+        state = torch.load(ckpt, map_location="cpu")
+        # Accept common wrappers.
+        if isinstance(state, dict):
+            for k in ("state_dict", "model", "net", "weights"):
+                if k in state and isinstance(state[k], dict):
+                    state = state[k]
+                    break
+        # Strip prefixes if present (e.g., 'module.').
+        if isinstance(state, dict):
+            cleaned = {}
+            for k, v in state.items():
+                kk = k[7:] if k.startswith("module.") else k
+                cleaned[kk] = v
+            state = cleaned
+        if not isinstance(state, dict):
+            raise RuntimeError(f"Unexpected checkpoint format for ConvNeXt FID: {type(state)}")
+
+        self.backbone.load_state_dict(state, strict=False)
+
+        self.register_buffer(
+            "mean",
+            torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1),
+            persistent=False,
+        )
+        self.register_buffer(
+            "std",
+            torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(1, 3, 1, 1),
+            persistent=False,
+        )
+
+        for p in self.parameters():
+            p.requires_grad = False
+
+    def forward(self, x01: torch.Tensor) -> torch.Tensor:
+        # x01: BCHW float in [0,1]
+        if x01.ndim != 4 or x01.size(1) != 3:
+            raise ValueError(f"Expected BCHW with 3 channels, got {tuple(x01.shape)}")
+        # ConvNeXt TCGA feature encoder is trained with ImageNet-style normalization at 224x224.
+        if x01.shape[-2:] != (224, 224):
+            x01 = F.interpolate(x01, size=(224, 224), mode="bilinear", align_corners=False)
+        x = (x01 - self.mean) / self.std
+
+        # timm convnext forward_features returns BCHW.
+        feats = self.backbone.forward_features(x)  # type: ignore[attr-defined]
+        if feats.ndim == 4:
+            feats = feats.mean(dim=(2, 3))
+        return feats
 
 
 @dataclass(frozen=True)
@@ -157,14 +245,12 @@ def compute_metrics_streaming(
     buf_p: list[torch.Tensor] = []
 
     if compute_fid:
-        model = InceptionV3(inception_weights="fid_inception").to(dev)
+        model = _ConvNeXtTinyFID().to(dev)
         model.eval()
 
     n = 0
+    fid_pairs_seen = 0
     for gt_t, pr_t in pairs:
-        if fid_max_items is not None and n >= int(fid_max_items):
-            break
-
         gt01 = _to_rgb01_from_minus1_1(gt_t).cpu()
         pr01 = _to_rgb01_from_minus1_1(pr_t).cpu()
 
@@ -175,31 +261,54 @@ def compute_metrics_streaming(
         if compute_ssim:
             ssims.append(_ssim_01(gt, pr))
 
-        if compute_fid and model is not None:
+        # FID can be capped independently of PSNR/SSIM.
+        # If fid_max_items is set, we still compute PSNR/SSIM on all pairs,
+        # but only feed the first fid_max_items pairs into Inception stats.
+        if (
+            compute_fid
+            and model is not None
+            and (fid_max_items is None or fid_pairs_seen < int(fid_max_items))
+        ):
             buf_t.append(gt01[0])
             buf_p.append(pr01[0])
             if len(buf_t) >= int(fid_batch_size):
                 bt = torch.stack(buf_t, dim=0).to(dev, dtype=torch.float32)
                 bp = torch.stack(buf_p, dim=0).to(dev, dtype=torch.float32)
-                at = model(bt)[0].detach().cpu().numpy().reshape(bt.size(0), -1)
-                ap = model(bp)[0].detach().cpu().numpy().reshape(bp.size(0), -1)
+                at = model(bt).detach().cpu().numpy().reshape(bt.size(0), -1)
+                ap = model(bp).detach().cpu().numpy().reshape(bp.size(0), -1)
                 stats_t.update(at)
                 stats_p.update(ap)
                 fid_n += int(bt.size(0))
+                fid_pairs_seen += int(bt.size(0))
                 buf_t.clear()
                 buf_p.clear()
 
         n += 1
 
     # Flush remainder
-    if compute_fid and model is not None and buf_t:
+    if (
+        compute_fid
+        and model is not None
+        and buf_t
+        and (fid_max_items is None or fid_pairs_seen < int(fid_max_items))
+    ):
+        if fid_max_items is not None:
+            # Truncate any overflow (possible when fid_max_items < fid_batch_size).
+            remaining = int(fid_max_items) - int(fid_pairs_seen)
+            if remaining <= 0:
+                buf_t = []
+                buf_p = []
+            else:
+                buf_t = buf_t[:remaining]
+                buf_p = buf_p[:remaining]
         bt = torch.stack(buf_t, dim=0).to(dev, dtype=torch.float32)
         bp = torch.stack(buf_p, dim=0).to(dev, dtype=torch.float32)
-        at = model(bt)[0].detach().cpu().numpy().reshape(bt.size(0), -1)
-        ap = model(bp)[0].detach().cpu().numpy().reshape(bp.size(0), -1)
+        at = model(bt).detach().cpu().numpy().reshape(bt.size(0), -1)
+        ap = model(bp).detach().cpu().numpy().reshape(bp.size(0), -1)
         stats_t.update(at)
         stats_p.update(ap)
         fid_n += int(bt.size(0))
+        fid_pairs_seen += int(bt.size(0))
 
     if compute_fid and fid_n >= 2:
         try:
@@ -231,13 +340,13 @@ def _accumulate_inception_stats(
     ds = _ImageTensorDataset(paths)
     dl = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
-    model = InceptionV3(inception_weights="fid_inception").to(device)
+    model = _ConvNeXtTinyFID().to(device)
     model.eval()
 
     stats = _ActStats()
     for x in dl:
         x = x.to(device=device, dtype=torch.float32)
-        pred = model(x)[0]
+        pred = model(x)
         acts = pred.detach().cpu().numpy().reshape(pred.size(0), -1)
         stats.update(acts)
     return stats.mean_cov()

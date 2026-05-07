@@ -1,0 +1,8 @@
+ckpt: /projects/illinois/eng/bioe/rxb/akshat/VSlite/results/restormer_i2i/a13/ckpt_epoch40.pth
+fid: 19.52324201308346
+n: 50000
+psnr_mean: 20.18021762743907
+psnr_std: 3.5382920154733863
+split: train
+ssim_mean: 0.47672391453788615
+ssim_std: 0.1991194074572546

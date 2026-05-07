@@ -19,9 +19,10 @@ export PYTHONUNBUFFERED=1
 
 VSLITE_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 INPUT_PARENT="${VSLITE_DIR}/input/IR"
-OUT_DIR="${VSLITE_DIR}/tests/swingan_i2i/b13/wsi_latest"
+RUN_TAG="b13"
+OUT_DIR="${VSLITE_DIR}/tests/swingan_i2i/${RUN_TAG}/wsi_latest"
 
-CKPT_PATH="${SWINGAN_CKPT_PATH:-${VSLITE_DIR}/results/swingan_i2i/b13/ckpt_latest.pth}"
+CKPT_PATH="${SWINGAN_CKPT_PATH:-${VSLITE_DIR}/results/swingan_i2i/${RUN_TAG}/ckpt_latest.pth}"
 CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_baseline.yaml"
 
 python infer_wsi_png.py \

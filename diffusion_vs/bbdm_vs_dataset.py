@@ -36,8 +36,8 @@ class VSliteAlignedNPYDataset(Dataset):
         if stage not in {"train", "val", "test"}:
             raise ValueError(f"stage must be train/val/test, got {stage!r}")
 
-        # BBDM configs use stage=val; VSlite uses test split for validation.
-        split = "train" if stage == "train" else "test"
+        # Map BBDM stage to VSlite dataset split.
+        split = "train" if stage == "train" else ("val" if stage == "val" else "test")
         self.image_size = int(getattr(dataset_config, "image_size", 256))
         self.to_normal = bool(getattr(dataset_config, "to_normal", True))
 

@@ -22,26 +22,27 @@ INPUT_PARENT="$VSLITE_ROOT/input/IR"
 
 SWINGAN_MODEL="${SWINGAN_MODEL:-1}"
 SWINGAN_VARIANT="${SWINGAN_VARIANT:-attention}"
+SWINGAN_DISC_VARIANT="${SWINGAN_DISC_VARIANT:-default}"
 SWINGAN_RESULTS_ROOT="$VSLITE_ROOT/results/swingan_i2i"
 
 if [[ "$SWINGAN_VARIANT" == "attention" ]]; then
   SWINGAN_CONFIG="$VSLITE_ROOT/SwinGAN/config_i2i_attention.yaml"
-  CKPT_DIR="a"
+  RUN_PREFIX="attention"
 else
   SWINGAN_CONFIG="$VSLITE_ROOT/SwinGAN/config_i2i_baseline.yaml"
-  CKPT_DIR="b"
+  RUN_PREFIX="baseline"
 fi
 
 if [[ "$SWINGAN_MODEL" == "1" ]]; then
-  CKPT_DIR="${CKPT_DIR}13"
+  RUN_TAG="${RUN_PREFIX}_${SWINGAN_DISC_VARIANT}_13"
   model_tag="13ch"
 else
-  CKPT_DIR="${CKPT_DIR}10"
+  RUN_TAG="${RUN_PREFIX}_${SWINGAN_DISC_VARIANT}_10"
   model_tag="10ch"
 fi
 
-SWINGAN_CKPT="$SWINGAN_RESULTS_ROOT/$CKPT_DIR/ckpt_latest.pth"
-OUT_DIR="$VSLITE_ROOT/results/swingan_wsi_png/${SWINGAN_VARIANT}_${model_tag}_$(date +%Y%m%d_%H%M%S)"
+SWINGAN_CKPT="$SWINGAN_RESULTS_ROOT/$RUN_TAG/ckpt_latest.pth"
+OUT_DIR="$VSLITE_ROOT/results/swingan_wsi_png/${SWINGAN_VARIANT}_${SWINGAN_DISC_VARIANT}_${model_tag}_$(date +%Y%m%d_%H%M%S)"
 
 mkdir -p "$OUT_DIR"
 

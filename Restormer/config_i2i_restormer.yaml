@@ -5,9 +5,9 @@
 dataroot: ""
 input_mode: "ir10"            # "ir10" or "irvis13"
 num_ir_channels: 10
-img_size: 256
+img_size: 512
 he_scale: "minus1_1"          # "minus1_1" or "0_1"
-split: null                    # null/train-val split via hash
+split: "train"                 # enable deterministic train/val/test split via hash (see dataset_vslite_i2i.py)
 split_seed: 1337
 split_fracs: [0.9, 0.05, 0.05]
 max_items: null
@@ -30,7 +30,7 @@ dual_pixel_task: true
 device: "cuda"
 gpu_id: "0"
 epochs_n: 50
-batch_size: 6
+batch_size: 1
 print_freq: 100
 lr: 0.0002
 weight_decay: 0.0

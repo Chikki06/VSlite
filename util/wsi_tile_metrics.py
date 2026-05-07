@@ -163,10 +163,11 @@ def main():
 
     # FID: stream activations (do NOT store per-patch tensors in RAM).
     device = torch.device(args.device if (args.device == "cpu" or torch.cuda.is_available()) else "cpu")
-    from models.inception import InceptionV3
+    # Use the same ConvNeXt-Tiny TCGA/H&E feature space as patch eval FID.
+    from util.i2i_metrics import _ConvNeXtTinyFID
 
-    inc = InceptionV3(inception_weights="fid_inception").to(device)
-    inc.eval()
+    fid_net = _ConvNeXtTinyFID().to(device)
+    fid_net.eval()
     fid_bs = int(args.fid_batch_size)
     _real_buf: list[torch.Tensor] = []
     _pred_buf: list[torch.Tensor] = []
@@ -179,8 +180,8 @@ def main():
         with torch.no_grad():
             x_real = torch.stack(_real_buf, dim=0).to(device=device, dtype=torch.float32)
             x_pred = torch.stack(_pred_buf, dim=0).to(device=device, dtype=torch.float32)
-            a_real = inc(x_real)[0].detach().cpu().numpy().reshape(x_real.size(0), -1)
-            a_pred = inc(x_pred)[0].detach().cpu().numpy().reshape(x_pred.size(0), -1)
+            a_real = fid_net(x_real).detach().cpu().numpy().reshape(x_real.size(0), -1)
+            a_pred = fid_net(x_pred).detach().cpu().numpy().reshape(x_pred.size(0), -1)
         real_stats.update(a_real)
         pred_stats.update(a_pred)
         _real_buf.clear()

@@ -2,7 +2,7 @@
 Patch inference + metrics for the VQGAN H&E autoencoder.
 
 Writes metrics under:
-  results/vqgan_vs/test/<run_name>/patch_eval/metrics.{json,yaml}
+  results/vqgan_vs/test/<run_name>/patch_eval_test/metrics.{json,yaml}
 """
 
 from __future__ import annotations
@@ -32,6 +32,10 @@ def main() -> None:
     ap.add_argument("--ckpt", type=str, required=True, help="checkpoint filename under <run>/checkpoints/")
     ap.add_argument("--input_nc", type=int, default=13, choices=[10, 13])
     ap.add_argument("--num_ir_channels", type=int, default=10)
+    ap.add_argument("--image_size", type=int, default=1024, help="Patch size for dataset resize during evaluation.")
+    ap.add_argument("--latent_grid_size", type=int, default=16)
+    ap.add_argument("--latent_dim", type=int, default=256)
+    ap.add_argument("--num_codebook_vectors", type=int, default=4096)
     ap.add_argument("--split", type=str, default="test", choices=["train", "test"])
     ap.add_argument("--num_test", type=int, default=75000)
     ap.add_argument("--fid_max_items", type=int, default=None)
@@ -56,9 +60,10 @@ def main() -> None:
         pass
 
     vq_args = _VQArgs()
-    vq_args.latent_dim = 256
-    vq_args.image_size = 256
-    vq_args.num_codebook_vectors = 1024
+    vq_args.latent_dim = int(args.latent_dim)
+    vq_args.image_size = int(args.image_size)
+    vq_args.latent_grid_size = int(args.latent_grid_size)
+    vq_args.num_codebook_vectors = int(args.num_codebook_vectors)
     vq_args.beta = 0.25
     vq_args.image_channels = 3
     vq_args.device = str(device)
@@ -67,9 +72,15 @@ def main() -> None:
     vqgan.load_state_dict(torch.load(ckpt_path, map_location="cpu"))
     vqgan.eval()
 
-    ds = VQGANHEDataset(dataroot=args.dataroot, split=str(args.split), input_nc=int(args.input_nc), num_ir_channels=int(args.num_ir_channels))
+    ds = VQGANHEDataset(
+        dataroot=args.dataroot,
+        split=str(args.split),
+        input_nc=int(args.input_nc),
+        num_ir_channels=int(args.num_ir_channels),
+        image_size=int(args.image_size),
+    )
 
-    patch_eval_leaf = "patch_eval" if args.split == "test" else "patch_eval_train"
+    patch_eval_leaf = "patch_eval_test" if args.split == "test" else "patch_eval_train"
     out_dir = os.path.join(str(Path(args.results_dir).resolve()), "test", args.name, patch_eval_leaf)
     os.makedirs(out_dir, exist_ok=True)
 

@@ -2,7 +2,7 @@
 #SBATCH --job-name=nf_b_10_tr
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
-#SBATCH --mem=40G
+#SBATCH --mem=64G
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=71:00:00
@@ -21,6 +21,11 @@ export NAFNET_GPU_ID="0"
 export NAFNET_INPUT_MODE="ir10"
 export NAFNET_OUTPUT_DIR="${VSLITE_DIR}/results/nafnet_i2i/b10"
 CONFIG_PATH="${NAFNET_DIR}/config_i2i_nafnet_base.yaml"
+
+# Unified eval caps (controls overhead of epoch-end split evaluation).
+export UNIFIED_EVAL_MAX_ITEMS_TRAIN="${UNIFIED_EVAL_MAX_ITEMS_TRAIN:-512}"
+export UNIFIED_EVAL_MAX_ITEMS_VAL="${UNIFIED_EVAL_MAX_ITEMS_VAL:-512}"
+export UNIFIED_EVAL_MAX_ITEMS_TEST="${UNIFIED_EVAL_MAX_ITEMS_TEST:-512}"
 
 python train_i2i_nafnet.py --config "$CONFIG_PATH"
 

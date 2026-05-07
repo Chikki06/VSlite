@@ -5,7 +5,7 @@
 #SBATCH --mem=64G
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=20:00:00
+#SBATCH --time=71:00:00
 #SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
@@ -19,6 +19,11 @@ export PYTHONUNBUFFERED=1
 export VS_DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
 export CHECKPOINTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline"
 NAME="vs3"
+
+# Unified TensorBoard eval caps (controls overhead of split evaluation).
+export UNIFIED_EVAL_MAX_BATCHES_TRAIN="${UNIFIED_EVAL_MAX_BATCHES_TRAIN:-20}"
+export UNIFIED_EVAL_MAX_BATCHES_VAL="${UNIFIED_EVAL_MAX_BATCHES_VAL:-50}"
+export UNIFIED_EVAL_MAX_BATCHES_TEST="${UNIFIED_EVAL_MAX_BATCHES_TEST:-50}"
 
 # 3-channel baseline: IR indices [0,8,9]
 python scripts/train.py --dataroot "$VS_DATAROOT" --dataset_mode VS --model contrastive_pix2pix \

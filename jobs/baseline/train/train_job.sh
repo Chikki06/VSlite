@@ -5,7 +5,7 @@
 #SBATCH --mem-per-gpu=20G
 #SBATCH --gpus=2
 #SBATCH --cpus-per-task=8
-#SBATCH --time=20:00:00
+#SBATCH --time=71:00:00
 #SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
@@ -26,6 +26,11 @@ CONTINUE_13CH="${CONTINUE_13CH:-true}"
 CHECKPOINTS_DIR="${VS_CHECKPOINTS_DIR:-$PWD/baseline}"
 
 echo "$(date -Is) train_job: sequential 10ch ($NAME10) then 13ch ($NAME13)" >&2
+
+# Unified TensorBoard eval caps (controls overhead of split evaluation).
+export UNIFIED_EVAL_MAX_BATCHES_TRAIN="${UNIFIED_EVAL_MAX_BATCHES_TRAIN:-20}"
+export UNIFIED_EVAL_MAX_BATCHES_VAL="${UNIFIED_EVAL_MAX_BATCHES_VAL:-50}"
+export UNIFIED_EVAL_MAX_BATCHES_TEST="${UNIFIED_EVAL_MAX_BATCHES_TEST:-50}"
 
 python scripts/train.py "${OPTS[@]}" "${TCGA_OPT[@]}" \
   --continue_train "$CONTINUE_10CH" \

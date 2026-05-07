@@ -56,10 +56,28 @@ def main():
     )
     ap.add_argument("--input_nc", type=int, default=13)
     ap.add_argument("--num_ir_channels", type=int, default=10)
+    ap.add_argument(
+        "--ir_channel_indices",
+        type=str,
+        default="",
+        help='Optional comma-separated IR indices (e.g. "0,8,9"). If set, overrides --num_ir_channels slicing.',
+    )
     ap.add_argument("--fid_max_items", type=int, default=None)
     ap.add_argument("--fid_batch_size", type=int, default=16)
     ap.add_argument("--save_every", type=int, default=0, help="If >0, save standardized PNG triplets every N patches.")
     args = ap.parse_args()
+
+    # If explicit IR indices are provided, align num_ir_channels with them so option parsing stays consistent.
+    num_ir_channels = int(args.num_ir_channels)
+    ir_idx = str(args.ir_channel_indices or "").strip()
+    if ir_idx:
+        try:
+            idx = [int(x.strip()) for x in ir_idx.split(",") if x.strip() != ""]
+        except Exception:
+            raise ValueError(f"Invalid --ir_channel_indices={ir_idx!r}. Expected comma-separated ints like '0,8,9'.")
+        if not idx:
+            raise ValueError(f"Invalid --ir_channel_indices={ir_idx!r}. No indices parsed.")
+        num_ir_channels = len(idx)
 
     num_test_for_parser = int(args.num_test) if args.num_test > 0 else 10**9
     argv = [
@@ -85,11 +103,13 @@ def main():
         "--input_nc",
         str(args.input_nc),
         "--num_ir_channels",
-        str(args.num_ir_channels),
+        str(num_ir_channels),
         "--load_from_opt_file",
         "--use_wandb",
         "false",
     ]
+    if ir_idx:
+        argv += ["--ir_channel_indices", ir_idx]
     sys.argv = argv
     opt = TestOptions().parse()
     opt.isTrain = False
@@ -106,11 +126,11 @@ def main():
     model.eval()
 
     # Keep run names short and consistent:
-    # - default (split=test): <results_dir>/test/<name>/patch_eval
-    # - split=train:          <results_dir>/test/<name>/patch_eval_train
+    # - split=test:  <results_dir>/test/<name>/patch_eval_test
+    # - split=train: <results_dir>/test/<name>/patch_eval_train
     # - if which_epoch != latest: same but with <name>_<which_epoch>
     run_name = opt.name if str(opt.which_epoch) == "latest" else f"{opt.name}_{opt.which_epoch}"
-    patch_eval_leaf = "patch_eval" if args.split == "test" else "patch_eval_train"
+    patch_eval_leaf = "patch_eval_test" if args.split == "test" else "patch_eval_train"
     out_dir = os.path.join(opt.results_dir, "test", run_name, patch_eval_leaf)
     input_dir = os.path.join(out_dir, "input")
     target_dir = os.path.join(out_dir, "target")

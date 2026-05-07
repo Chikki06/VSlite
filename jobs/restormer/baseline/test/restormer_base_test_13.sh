@@ -27,9 +27,9 @@ export RESTORMER_INPUT_MODE="irvis13"
 
 CKPT_PATH="${RESTORMER_OUTPUT_DIR}/ckpt_latest.pth"
 WSI_PARENT="${VSLITE_ROOT}/input/IR"
-TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/restormer_base_13"
+TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/b13"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
-NUM_TEST="${NUM_TEST:-50000}"
+NUM_TEST="${NUM_TEST:-75000}"
 
 mkdir -p "$PRED_WSI_DIR"
 
@@ -56,18 +56,18 @@ python "$TEST_SCRIPT" \
   --ckpt "$CKPT_PATH" \
   --split "test" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \
-  --out_dir "${TEST_ROOT}/patch_eval"
+  --out_dir "${TEST_ROOT}/patch_eval_test"
 
 python "$TEST_SCRIPT" \
   --config "$CONFIG_FILE" \
   --ckpt "$CKPT_PATH" \
   --split "train" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \

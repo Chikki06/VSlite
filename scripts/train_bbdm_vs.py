@@ -26,6 +26,9 @@ if str(_VSLITE_ROOT) not in sys.path:
 
 from diffusion_vs.bbdm_latent_vs_model import build_latent_bbdm_model_class
 from diffusion_vs.bbdm_vs_dataset import register_vslite_dataset
+from diffusion_vs.bbdm_runner_vs import register_bbdm_vs_runner
+from util.run_logger import RunLogger
+from util.save_schedule import make_iter_schedule
 
 
 def _dict2namespace(d: dict):
@@ -42,7 +45,11 @@ def _dict2namespace(d: dict):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=str, required=True, help="yaml config (BBDM style)")
-    ap.add_argument("--result_path", type=str, default="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/bbdm_vs")
+    ap.add_argument(
+        "--result_path",
+        type=str,
+        default=str((_VSLITE_ROOT / "results" / "unified" / "bbdm_vs").resolve()),
+    )
     ap.add_argument("--gpu_ids", type=str, default="0")
     ap.add_argument("--seed", type=int, default=1234)
     ap.add_argument("--resume_model", type=str, default=None)
@@ -98,7 +105,27 @@ def main() -> None:
         LatentBrownianBridgeModelVS = build_latent_bbdm_model_class(_VSLITE_ROOT)
         bbdm_runner_mod.LatentBrownianBridgeModel = LatentBrownianBridgeModelVS  # type: ignore
 
+    # Register our unified-image saver runner under the existing name 'BBDMRunner'.
+    register_bbdm_vs_runner()
+
+    # Adjust sample cadence to ~50 saves per run (BaseRunner triggers sampling on
+    # `global_step % int(sample_interval * epoch_length) == 0`).
+    try:
+        n_epochs = int(getattr(nconfig.training, "n_epochs", 50))
+        nconfig.training.sample_interval = max(1, int(round(n_epochs / 50)))
+    except Exception:
+        pass
+
     runner = get_runner(nconfig.runner, nconfig)  # type: ignore
+
+    # Attach baseline-style text logs and unified image saver schedule.
+    run_root = str(runner.config.result.result_path)  # type: ignore[attr-defined]
+    run_logger = RunLogger(run_root, name="bbdm_vs")
+    run_logger.dump_opts(dict_config)
+    samples_dir = os.path.join(run_root, "samples_unified")
+    should_save = make_iter_schedule(int(getattr(nconfig.training, "n_steps", 200000)), target_saves=50)
+    if hasattr(runner, "attach_unified_saver"):
+        runner.attach_unified_saver(run_logger=run_logger, should_save_image=should_save, samples_dir=samples_dir)
     runner.train()
 
 

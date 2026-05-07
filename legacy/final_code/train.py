@@ -21,11 +21,12 @@ import torch
 
 import numpy as np
 
-os.makedirs('images/', exist_ok=True)
-# os.makedirs('saved_models/', exist_ok=True)
-
 # parse options
 opt = TrainOptions().parse()
+
+# Legacy debug outputs: keep them under the experiment checkpoint folder, not repo-root.
+_debug_dir = os.path.join(opt.checkpoints_dir, opt.name, "debug_npys")
+os.makedirs(_debug_dir, exist_ok=True)
 
 # print options to help debugging
 print(' '.join(sys.argv))
@@ -78,9 +79,10 @@ for epoch in iter_counter.training_epochs():
 #                     ('real_image', data_i['image']),
 #                 ]
 #             )
-            np.save('images/target_'+str(iter_counter.total_steps_so_far)+'.npy',data_i['target'].data.cpu().numpy())
-            np.save('images/input_'+str(iter_counter.total_steps_so_far)+'.npy',data_i['input'].data.cpu().numpy())
-            np.save('images/gen_'+str(iter_counter.total_steps_so_far)+'.npy',trainer.get_latest_generated().data.cpu().numpy())
+            step = str(iter_counter.total_steps_so_far)
+            np.save(os.path.join(_debug_dir, 'target_' + step + '.npy'), data_i['target'].data.cpu().numpy())
+            np.save(os.path.join(_debug_dir, 'input_' + step + '.npy'), data_i['input'].data.cpu().numpy())
+            np.save(os.path.join(_debug_dir, 'gen_' + step + '.npy'), trainer.get_latest_generated().data.cpu().numpy())
 
 #             visualizer.display_current_results(
 #                 visuals, epoch, iter_counter.total_steps_so_far

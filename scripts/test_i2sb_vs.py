@@ -5,7 +5,7 @@ Loads `results/i2sb_vs/<name>/latest.pt` (I2SB checkpoint format) and runs DDPM 
 from x1 (projected VS conditioning) toward x0 (H&E).
 
 Outputs:
-  <results_dir>/test/<run_name>/patch_eval/metrics.{json,yaml}
+  <results_dir>/test/<run_name>/patch_eval_test/metrics.{json,yaml}
 in the same layout as VSlite baseline models.
 """
 
@@ -106,9 +106,9 @@ def main() -> None:
         num_ir_channels=int(args.num_ir_channels),
     )
 
-    # Output layout: results_dir/test/<run>/patch_eval
+    # Output layout: results_dir/test/<run>/patch_eval_test
     run_name = args.name
-    patch_eval_leaf = "patch_eval" if args.split == "test" else "patch_eval_train"
+    patch_eval_leaf = "patch_eval_test" if args.split == "test" else "patch_eval_train"
     out_dir = os.path.join(str(Path(args.results_dir).resolve()), "test", run_name, patch_eval_leaf)
     os.makedirs(out_dir, exist_ok=True)
 

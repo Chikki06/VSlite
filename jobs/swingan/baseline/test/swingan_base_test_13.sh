@@ -20,15 +20,16 @@ export SWINGAN_INPUT_MODE="irvis13"
 export SWINGAN_DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
 
 VSLITE_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
-SWINGAN_OUTPUT_DIR="${VSLITE_DIR}/results/swingan_i2i/b13"
+SWINGAN_RUN_TAG="b13"
+SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan_i2i/${SWINGAN_RUN_TAG}}"
 CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_baseline.yaml"
 
 CKPT_PATH="${SWINGAN_CKPT_PATH:-${SWINGAN_OUTPUT_DIR}/ckpt_latest.pth}"
-NUM_TEST="${NUM_TEST:-50000}"
+NUM_TEST="${NUM_TEST:-75000}"
 SWINGAN_TEST_SPLIT="test"
 WSI_PARENT="${VSLITE_DIR}/input/IR"
-TEST_ROOT="${VSLITE_DIR}/results/swingan_i2i/test/sgb_13"
-PATCH_OUT_DIR="${TEST_ROOT}/patch_eval"
+TEST_ROOT="${VSLITE_DIR}/results/swingan_i2i/test/${SWINGAN_RUN_TAG}"
+PATCH_OUT_DIR="${TEST_ROOT}/patch_eval_test"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 
 mkdir -p "$PRED_WSI_DIR"
@@ -58,7 +59,7 @@ python test_i2i.py \
   --num_samples 20 \
   --split "$SWINGAN_TEST_SPLIT" \
   --out_dir "$PATCH_OUT_DIR" \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}"
@@ -70,7 +71,7 @@ python test_i2i.py \
   --num_samples 20 \
   --split "train" \
   --out_dir "${TEST_ROOT}/patch_eval_train" \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}"

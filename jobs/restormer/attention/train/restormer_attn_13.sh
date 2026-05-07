@@ -2,7 +2,7 @@
 #SBATCH --job-name=rr_a_13_tr
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
-#SBATCH --mem=40G
+#SBATCH --mem=64G
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=71:00:00
@@ -17,11 +17,16 @@ conda activate torchenv
 
 export PYTHONUNBUFFERED=1
 export VSLITE_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
-export RESTORMER_DIR="${VSLITE_DIR}/Restromer"
+export RESTORMER_DIR="${VSLITE_DIR}/Restormer"
 export RESTORMER_DATAROOT="${VSLITE_DIR}/dataset/data_frozen"
 export RESTORMER_GPU_ID="0"
 export OMP_NUM_THREADS="4"
 export MKL_NUM_THREADS="4"
+
+# Unified eval caps (controls overhead of epoch-end split evaluation).
+export UNIFIED_EVAL_MAX_ITEMS_TRAIN="${UNIFIED_EVAL_MAX_ITEMS_TRAIN:-512}"
+export UNIFIED_EVAL_MAX_ITEMS_VAL="${UNIFIED_EVAL_MAX_ITEMS_VAL:-512}"
+export UNIFIED_EVAL_MAX_ITEMS_TEST="${UNIFIED_EVAL_MAX_ITEMS_TEST:-512}"
 
 export RESTORMER_INPUT_MODE="irvis13"
 export RESTORMER_OUTPUT_DIR="${VSLITE_DIR}/results/restormer_i2i/a13"

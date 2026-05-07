@@ -8,7 +8,7 @@ import torch
 import os
 from scipy import linalg
 from .base_evaluator import BaseEvaluator
-from models.inception import InceptionV3
+from util.i2i_metrics import _ConvNeXtTinyFID
 from collections import OrderedDict
 
 DIR_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -77,7 +77,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
 def get_activations(model, x):
     x = (x + 1.0) * 0.5  # to range [0, 1]
-    pred = model(x)[0]
+    pred = model(x)
     return pred.detach().cpu().numpy().reshape(pred.size(0), -1)
 
 
@@ -98,6 +98,12 @@ class FIDEvaluator(BaseEvaluator):
             action='store_true',
             help='Alias for --skip_fid_if_cached.',
         )
+        parser.add_argument(
+            '--fid_include_traintest',
+            action='store_true',
+            help='Also compute a combined FID over train+test activations ("traintest"). '
+            'Disabled by default to keep evaluation to exactly train and test.',
+        )
         return parser
 
     def __init__(self, opt):
@@ -115,7 +121,7 @@ class FIDEvaluator(BaseEvaluator):
         return os.path.join(
             target_dir,
             "stats_for_fid_{}_{}_{}.npz".format(
-                phase, self.opt.inception_weights, self.opt.FID_max_num_samples
+                phase, getattr(self, "fid_feature_name", "convnext_tiny_tcga"), self.opt.FID_max_num_samples
             ),
         )
 
@@ -134,7 +140,7 @@ class FIDEvaluator(BaseEvaluator):
                 w_ep,
                 dataset_mode,
                 phase,
-                self.opt.inception_weights,
+                getattr(self, "fid_feature_name", "convnext_tiny_tcga"),
                 self.opt.FID_max_num_samples,
             ),
         )
@@ -169,16 +175,18 @@ class FIDEvaluator(BaseEvaluator):
                 return
 
         print("preparing for FID")
-        print('Loading Inception network')
-        self.model = InceptionV3(inception_weights=self.opt.inception_weights)
+        print('Loading ConvNeXt feature network (for FID)')
+        self.fid_feature_name = "convnext_tiny_tcga"
+        self.model = _ConvNeXtTinyFID()
         self.model.cuda()
         self.model.eval()
-        print('Loaded Inception network')
+        print('Loaded ConvNeXt feature network')
         self.need_real_stat = self.find_cached_activations("traintest") is None
         self.nsamples = min(len(dataloader), self.opt.FID_max_num_samples)
+        feat_dim = 768
         if self.need_real_stat:
-            self.real_acts = np.random.normal(size=(self.nsamples, 2048)) * 100
-        self.fake_acts = np.random.normal(size=(self.nsamples, 2048)) + 100
+            self.real_acts = np.random.normal(size=(self.nsamples, feat_dim)) * 100
+        self.fake_acts = np.random.normal(size=(self.nsamples, feat_dim)) + 100
         self.cur_idx = 0
 
         self.batch_size = dataloader.batch_size
@@ -329,7 +337,11 @@ class FIDEvaluator(BaseEvaluator):
         fid = calculate_frechet_distance(real_mean, real_cov, fake_mean, fake_cov)
         fids['FID%s%d' % (self.current_phase, self.cur_idx)] = fid
 
-        if "trainfake" in self.all_acts and "testfake" in self.all_acts:
+        if (
+            getattr(self.opt, 'fid_include_traintest', False)
+            and "trainfake" in self.all_acts
+            and "testfake" in self.all_acts
+        ):
             all_fake_acts = np.concatenate(
                 (self.all_acts["trainfake"], self.all_acts["testfake"]), axis=0
             )

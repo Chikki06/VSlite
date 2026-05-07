@@ -100,7 +100,12 @@ def main() -> None:
 
     ds = Registers.datasets[nconfig.data.dataset_type](nconfig.data.dataset_config, stage=("train" if args.split == "train" else "test"))
 
-    out_dir = os.path.join(str(Path(args.result_path).resolve()), "test", str(args.run_name), "patch_eval" if args.split == "test" else "patch_eval_train")
+    out_dir = os.path.join(
+        str(Path(args.result_path).resolve()),
+        "test",
+        str(args.run_name),
+        "patch_eval_test" if args.split == "test" else "patch_eval_train",
+    )
     os.makedirs(out_dir, exist_ok=True)
 
     def _pairs():

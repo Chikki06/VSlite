@@ -26,6 +26,10 @@ if str(_VSLITE_ROOT) not in sys.path:
 
 from diffusion_vs.data import VSliteVSDiffusionDataset, collate_vs_batch
 from diffusion_vs.i2sb_vs import CondToRGB, resolve_i2sb_paths
+from diffusion_vs.i2sb_runner_vs import LossLogTee, make_i2sb_runner_class
+from util.run_logger import RunLogger
+from util.save_schedule import make_iter_schedule
+from util.unified_tb import resolve_unified_tb
 
 
 class _I2SBMixtureDataset(torch.utils.data.Dataset):
@@ -80,7 +84,7 @@ def main() -> None:
         sys.path.insert(0, str(i2sb_root))
 
     from logger import Logger  # type: ignore
-    from i2sb import Runner, download_ckpt  # type: ignore
+    from i2sb import download_ckpt  # type: ignore
 
     paths = resolve_i2sb_paths(_VSLITE_ROOT)
     # Ensure ADM checkpoints/pkls exist.
@@ -128,15 +132,21 @@ def main() -> None:
     opt.ema = float(args.ema)
 
     # paths / ckpt
-    opt.log_dir = ckpt_path / "log"
+    # I2SB uses opt.log_dir/opt.name for TensorBoard runs; route this into results/unified/.
+    u = resolve_unified_tb(model="i2sb_vs", run=str(args.name))
+    opt.log_dir = u.root / u.model  # TensorBoardWriter appends /opt.name
     opt.log_dir.mkdir(parents=True, exist_ok=True)
+    opt.log_writer = "tensorboard"
     opt.ckpt_path = ckpt_path
     if args.ckpt:
         opt.load = Path(args.results_dir).resolve() / str(args.ckpt) / "latest.pt"
     else:
         opt.load = None
 
+    run_logger = RunLogger(str(ckpt_path), name=str(args.name))
+    run_logger.dump_opts(vars(args))
     log = Logger(opt.global_rank, opt.log_dir)  # type: ignore
+    log = LossLogTee(log, run_logger)
     log.info(f"[VSlite] Training I2SB-VS: name={opt.name} input_nc={args.input_nc}")
 
     base_train = VSliteVSDiffusionDataset(
@@ -147,6 +157,12 @@ def main() -> None:
     )
     base_val = VSliteVSDiffusionDataset(
         dataroot=args.dataroot,
+        split="val",
+        input_nc=int(args.input_nc),
+        num_ir_channels=int(args.num_ir_channels),
+    )
+    base_test = VSliteVSDiffusionDataset(
+        dataroot=args.dataroot,
         split="test",
         input_nc=int(args.input_nc),
         num_ir_channels=int(args.num_ir_channels),
@@ -155,11 +171,20 @@ def main() -> None:
     cond_to_rgb = CondToRGB(int(args.input_nc)).to(opt.device)
     train_ds = _I2SBMixtureDataset(base_train, cond_to_rgb)
     val_ds = _I2SBMixtureDataset(base_val, cond_to_rgb)
+    test_ds = _I2SBMixtureDataset(base_test, cond_to_rgb)
 
     # I2SB Runner uses its own infinite-loader util; datasets only need __getitem__.
-    run = Runner(opt, log)
+    I2SBRunner = make_i2sb_runner_class()
+    run = I2SBRunner(opt, log)
+    samples_dir = str(ckpt_path / "samples")
+    should_save = make_iter_schedule(int(opt.num_itr), target_saves=50)
+    run.attach_unified_saver(
+        samples_dir=samples_dir,
+        run_logger=run_logger,
+        should_save_image=should_save,
+    )
     # corrupt_method unused when corrupt == 'mixture'
-    run.train(opt, train_ds, val_ds, corrupt_method=None)
+    run.train(opt, train_ds, val_ds, corrupt_method=None, test_dataset=test_ds)
 
 
 if __name__ == "__main__":

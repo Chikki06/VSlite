@@ -20,6 +20,50 @@ def _hash01(s: str, seed: int) -> float:
     return int(h[:8], 16) / float(0xFFFFFFFF)
 
 
+def _parse_sample_id(patch_name: str) -> str:
+    """
+    Extract sample id from a patch filename like:
+      <sample>_<ypos>_<xpos>.npy
+    We assume sample ids do not include '_' (they often include '-' like '10440-1').
+    """
+    base = os.path.splitext(os.path.basename(patch_name))[0]
+    return base.split("_", 1)[0]
+
+
+def _read_split_samples(list_path: str) -> tuple[set[str], list[str]]:
+    """
+    Read newline-separated sample ids/prefixes from a split list (e.g. test.txt / val.txt).
+    Ignores blank lines and lines starting with '#'.
+
+    Rules:
+    - Line contains '-' (e.g. '10440-1'): treated as an exact sample id.
+    - Line without '-' (e.g. '10440'): treated as a prefix; matches '10440-*'.
+    """
+    exact: set[str] = set()
+    prefixes: list[str] = []
+    with open(list_path, "r", encoding="utf-8") as f:
+        for raw in f.read().splitlines():
+            s = raw.strip()
+            if not s or s.startswith("#"):
+                continue
+            if "-" in s:
+                exact.add(s)
+            else:
+                prefixes.append(s)
+    # deterministic for reproducibility
+    prefixes = sorted(set(prefixes))
+    return exact, prefixes
+
+
+def _in_split(sample_id: str, exact: set[str], prefixes: list[str]) -> bool:
+    if sample_id in exact:
+        return True
+    for p in prefixes:
+        if sample_id.startswith(p):
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class SplitFractions:
     train: float = 0.9
@@ -60,6 +104,8 @@ class VSLiteI2IDataset(Dataset):
         split_seed: int = 1337,
         split_fracs: SplitFractions = SplitFractions(),
         indices: Optional[Sequence[int]] = None,
+        test_list_path: Optional[str] = None,
+        val_list_path: Optional[str] = None,
     ):
         self.dataroot = dataroot
         self.input_mode = input_mode
@@ -87,23 +133,69 @@ class VSLiteI2IDataset(Dataset):
         if max_items is not None:
             names = names[: int(max_items)]
 
-        # Apply deterministic split by filename hash if requested.
+        # Optional: fixed test split from test.txt (split-by-sample to prevent leakage).
+        if test_list_path is None or str(test_list_path).strip() == "":
+            candidate = os.path.join(dataroot, "test.txt")
+            test_list_path = candidate if os.path.isfile(candidate) else None
+        test_rules = _read_split_samples(test_list_path) if test_list_path else None
+
+        # Optional: fixed val split from val.txt (split-by-sample).
+        if val_list_path is None or str(val_list_path).strip() == "":
+            candidate = os.path.join(dataroot, "val.txt")
+            val_list_path = candidate if os.path.isfile(candidate) else None
+        val_rules = _read_split_samples(val_list_path) if val_list_path else None
+
+        # Apply split if requested.
         if split is not None:
             split = split.lower()
             if split not in {"train", "val", "test"}:
                 raise ValueError(f"split must be one of train/val/test, got {split}")
-            keep: List[str] = []
-            for n in names:
-                r = _hash01(n, split_seed)
-                if r < split_fracs.train:
-                    bucket = "train"
-                elif r < split_fracs.train + split_fracs.val:
-                    bucket = "val"
+
+            if test_rules is not None:
+                exact, prefixes = test_rules
+                # Reserve all patches from listed samples into the test split.
+                if split == "test":
+                    names = [n for n in names if _in_split(_parse_sample_id(n), exact, prefixes)]
                 else:
-                    bucket = "test"
-                if bucket == split:
-                    keep.append(n)
-            names = keep
+                    # Remove all test-listed samples first.
+                    names = [n for n in names if not _in_split(_parse_sample_id(n), exact, prefixes)]
+
+                    # If a val list exists, use it to define val; otherwise hash-split remaining.
+                    if val_rules is not None:
+                        v_exact, v_prefixes = val_rules
+                        if split == "val":
+                            # Note: if a sample is in both val and test, it was already removed above.
+                            names = [n for n in names if _in_split(_parse_sample_id(n), v_exact, v_prefixes)]
+                        else:
+                            # train
+                            names = [n for n in names if not _in_split(_parse_sample_id(n), v_exact, v_prefixes)]
+                    else:
+                        # Now split remaining into train/val deterministically.
+                        tv = float(split_fracs.train + split_fracs.val)
+                        if tv <= 0:
+                            raise ValueError(f"Invalid split_fracs for train/val: {split_fracs}")
+                        train_cut = float(split_fracs.train) / tv
+                        keep: List[str] = []
+                        for n in names:
+                            r = _hash01(n, split_seed)
+                            bucket = "train" if r < train_cut else "val"
+                            if bucket == split:
+                                keep.append(n)
+                        names = keep
+            else:
+                # Backwards-compatible: split by filename hash into train/val/test.
+                keep: List[str] = []
+                for n in names:
+                    r = _hash01(n, split_seed)
+                    if r < split_fracs.train:
+                        bucket = "train"
+                    elif r < split_fracs.train + split_fracs.val:
+                        bucket = "val"
+                    else:
+                        bucket = "test"
+                    if bucket == split:
+                        keep.append(n)
+                names = keep
 
         if indices is not None:
             names = [names[i] for i in indices]

@@ -2,10 +2,10 @@
 #SBATCH --job-name=b_tr
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
-#SBATCH --mem=40G
+#SBATCH --mem=64G
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=20:00:00
+#SBATCH --time=71:00:00
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
 #SBATCH --mail-type=END,FAIL

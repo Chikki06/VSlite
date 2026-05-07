@@ -35,7 +35,7 @@ if [[ ! -f "$CKPT_PATH" ]]; then
   exit 2
 fi
 
-TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/restormer_attn_13_e40"
+TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/a13_e40"
 
 # Patch eval + metrics on TEST split (OOD)
 python "$TEST_SCRIPT" \
@@ -43,11 +43,11 @@ python "$TEST_SCRIPT" \
   --ckpt "$CKPT_PATH" \
   --split "test" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \
-  --out_dir "${TEST_ROOT}/patch_eval"
+  --out_dir "${TEST_ROOT}/patch_eval_test"
 
 # Patch eval + metrics on TRAIN split (in-distribution)
 python "$TEST_SCRIPT" \
@@ -55,7 +55,7 @@ python "$TEST_SCRIPT" \
   --ckpt "$CKPT_PATH" \
   --split "train" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \

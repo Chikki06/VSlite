@@ -23,9 +23,9 @@ CONFIG_FILE="${NAFNET_DIR}/config_i2i_nafnet_base.yaml"
 
 CKPT_PATH="${NAFNET_CKPT_PATH:-${NAFNET_OUTPUT_DIR}/ckpt_latest.pth}"
 WSI_PARENT="${VSLITE_DIR}/input/IR"
-TEST_ROOT="${VSLITE_DIR}/results/nafnet_i2i/test/nf_b_10"
+TEST_ROOT="${VSLITE_DIR}/results/nafnet_i2i/test/b10"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
-NUM_TEST="${NUM_TEST:-50000}"
+NUM_TEST="${NUM_TEST:-75000}"
 
 mkdir -p "$PRED_WSI_DIR"
 
@@ -52,18 +52,18 @@ python test_i2i_nafnet.py \
   --ckpt "$CKPT_PATH" \
   --split "test" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \
-  --out_dir "${TEST_ROOT}/patch_eval"
+  --out_dir "${TEST_ROOT}/patch_eval_test"
 
 python test_i2i_nafnet.py \
   --config "${NAFNET_DIR}/config_i2i_nafnet_base.yaml" \
   --ckpt "$CKPT_PATH" \
   --split "train" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-50000}" \
+  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \

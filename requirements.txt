@@ -1,3 +1,9 @@
+torch
+torchvision
+numpy
+Pillow
+PyYAML
+tqdm
 dill
 dominate>=2.3.1
 packaging

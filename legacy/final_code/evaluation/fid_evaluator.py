@@ -87,6 +87,12 @@ class FIDEvaluator(BaseEvaluator):
         parser.add_argument(
             '--cache_dir', type=str, default=os.path.join(DIR_PATH, 'cache')
         )
+        parser.add_argument(
+            '--fid_include_traintest',
+            action='store_true',
+            help='Also compute a combined FID over train+test activations ("traintest"). '
+            'Disabled by default to keep evaluation to exactly train and test.',
+        )
         return parser
 
     def __init__(self, opt):
@@ -255,7 +261,11 @@ class FIDEvaluator(BaseEvaluator):
         fid = calculate_frechet_distance(real_mean, real_cov, fake_mean, fake_cov)
         fids['FID%s%d' % (self.current_phase, self.cur_idx)] = fid
 
-        if "trainfake" in self.all_acts and "testfake" in self.all_acts:
+        if (
+            getattr(self.opt, 'fid_include_traintest', False)
+            and "trainfake" in self.all_acts
+            and "testfake" in self.all_acts
+        ):
             all_fake_acts = np.concatenate(
                 (self.all_acts["trainfake"], self.all_acts["testfake"]), axis=0
             )

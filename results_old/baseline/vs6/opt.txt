@@ -1,0 +1,127 @@
+            D_steps_per_G: 1                             
+      FID_max_num_samples: 50000                         
+              G_eval_mode: False                         
+                  L1_loss: False                         	[default: True]
+             aspect_ratio: 1.0                           
+               batch_size: 10                            	[default: 8]
+                    beta1: 0.5                           
+                    beta2: 0.999                         
+                cache_dir: /projects/illinois/eng/bioe/rxb/akshat/VSlite/evaluation/cache
+      cache_filelist_read: False                         
+     cache_filelist_write: False                         
+          checkpoints_dir: /projects/illinois/eng/bioe/rxb/akshat/VSlite/results/baseline	[default: ./checkpoints]
+   contain_dontcare_label: False                         
+           continue_train: True                          	[default: False]
+         contrastive_loss: True                          	[default: None]
+                crop_size: 512                           
+        data_augmentation: None                          
+                 dataroot: /projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen	[default: dataset/data_1024]
+             dataset_mode: VS                            
+                    debug: False                         
+             display_freq: 30000                         
+          display_winsize: 400                           
+          evaluation_freq: 5000                          
+       evaluation_metrics: fid                           
+                   exp_id: None                          
+    fid_include_traintest: False                         
+              freeze_netF: True                          
+              freeze_netG: False                         
+              freeze_netH: False                         
+             ganFeat_loss: False                         
+                 gan_loss: True                          
+                 gan_mode: ls                            
+                  gpu_ids: 0                             
+gradient_flows_to_negative_nce: False                         
+        inception_weights: fid_inception                 
+                init_type: xavier                        
+            init_variance: 0.02                          
+                 input_nc: 6                             	[default: 3]
+       ir_channel_indices: 0,8,9                         	[default: ]
+                  isTrain: True                          	[default: None]
+                 label_nc: 4                             
+                lambda_KL: 0.0                           
+                lambda_L1: 10.0                          
+               lambda_NCE: 10.0                          
+    lambda_NCE_perceptual: 10.0                          
+               lambda_gan: 1.0                           
+           lambda_ganFeat: 10.0                          
+               lambda_kld: 0.05                          
+               lambda_vgg: 10.0                          
+            layer_weights: None                          
+       load_from_opt_file: False                         
+                load_size: 1024                          
+                       lr: 0.0002                        
+         max_dataset_size: 9223372036854775807           
+                    model: contrastive_pix2pix           
+                 nThreads: 4                             
+               n_layers_D: 4                             
+                     name: vs6                           	[default: None]
+       nce_fake_negatives: True                          
+nce_layer_weight_multiplier: 1.0                           
+               nce_layers: 1,2,3,4,5                     
+                 nce_mode: bidirectional                 
+                 nce_norm: 2                             
+                    nce_t: 0.07                          
+               nce_use_L1: False                         
+                      ndf: 64                            
+                      nef: 16                            
+                     netD: multiscale                    
+             netD_subarch: n_layer                       
+                     netF: vgg19                         
+        netF_resize_input: True                          
+                     netG: attunet                       
+                     netH: mlp_sample                    
+                  netH_nc: 256                           
+                      ngf: 64                            
+                    niter: 5                             
+              niter_decay: 10                            
+               no_L1_loss: True                          
+                  no_TTUR: True                          
+      no_contrastive_loss: False                         
+                  no_flip: False                         
+             no_flip_vert: True                          
+          no_ganFeat_loss: True                          
+              no_gan_loss: False                         
+                  no_html: False                         
+       no_input_semantics: True                          
+              no_instance: False                         
+              no_json_log: False                         
+                no_rotate: True                          
+                no_tf_log: True                          
+              no_vgg_loss: True                          
+                   norm_D: spectralinstance              
+                   norm_E: spectralinstance              
+                   norm_G: spectralinstance              
+                    num_D: 2                             
+        num_F_steps_per_G: 1                             
+              num_G_steps: 1                             
+          num_ir_channels: 10                            
+              num_patches: 1024                          
+                optimizer: adam                          
+                output_nc: 3                             
+       perceptual_encoder: vgg                           
+                    phase: train                         
+          preprocess_mode: scale_width_and_crop          
+         pretrained_epoch: latest                        
+          pretrained_name: None                          
+          pretrained_netF: True                          
+          pretrained_nets: G,D,F_q,F_k                   
+           pretrained_vgg: True                          
+               print_freq: 100                           
+          save_epoch_freq: 5                             
+         save_latest_freq: 30000                         
+           serial_batches: False                         
+       skip_fid_if_cached: False                         
+        tcga_feature_ckpt: tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5
+             unfrozen_vgg: False                         
+          use_crn_lambdas: False                         
+            use_eval_mode: True                          
+                  use_vae: False                         
+                use_wandb: False                         
+                 vgg_loss: False                         	[default: True]
+   vgg_loss_include_input: False                         
+      vgg_normalize_input: False                         
+         vgg_resize_input: False                         
+           wandb_job_type: training                      
+              which_epoch: latest                        
+                    z_dim: 256                           
