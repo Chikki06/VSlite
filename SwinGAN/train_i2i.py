@@ -27,7 +27,7 @@ from loss_i2i import GANLoss, ConvNeXtFeatureExtractor
 from utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
 from util.atomic_io import atomic_torch_save
 from util.fixed_preview import gather_fixed_preview_batch
-from util.run_logger import RunLogger
+from util.run_logger import RunLogger, should_log_epoch_samples
 from util.sample_grid import save_unified_sample, split_batch_to_list
 from util.save_schedule import make_iter_schedule
 from util.unified_tb import build_unified_writer
@@ -213,6 +213,7 @@ def main():
         train_ds,
         batch_size=int(cfg.batch_size),
         shuffle=True,
+        drop_last=True,
         **_dataloader_kwargs(int(cfg.train_num_workers), device),
     )
     val_loader = DataLoader(
@@ -265,7 +266,6 @@ def main():
     u_writer, u_tb = build_unified_writer(model="swingan_i2i", run=run_name)
 
     use_tqdm = tqdm is not None and sys.stderr.isatty()
-    bs = int(cfg.batch_size)
     total_epochs = int(cfg.epochs_n)
     save_epoch_freq = int(getattr(cfg, "save_epoch_freq", 1))
     start_epoch = 0
@@ -374,6 +374,7 @@ def main():
 
         epoch_start_time = time.time()
         last_iter_time = time.time()
+        epoch_samples = 0
         loader_iter = train_loader
         if use_tqdm:
             loader_iter = tqdm(
@@ -386,6 +387,7 @@ def main():
         for batch_idx, batch in enumerate(loader_iter):
             x = batch["x"].to(device=device, dtype=torch.float32)
             y = batch["y"].to(device=device, dtype=torch.float32)
+            bs_step = int(x.shape[0])
 
             # --- Train D ---
             with torch.no_grad():
@@ -425,23 +427,20 @@ def main():
                 )
 
             current_time = time.time()
-            time_per_img = (current_time - last_iter_time) / max(1, bs)
+            time_per_img = (current_time - last_iter_time) / max(1, bs_step)
             last_iter_time = current_time
             global_step += 1
+            epoch_samples += bs_step
 
-            total_img_steps = global_step * bs
-            if (
-                not use_tqdm
-                and print_freq > 0
-                and (total_img_steps % print_freq) < bs
+            if not use_tqdm and print_freq > 0 and should_log_epoch_samples(
+                epoch_samples, bs_step, int(print_freq)
             ):
-                epoch_iters = (batch_idx + 1) * bs
                 lr_g = float(optG.param_groups[0]["lr"])
                 logger.info(
                     "(epoch: %d, iters: %d, time: %.3f, lr: %.5f) "
                     "D: %.3f G: %.3f G_L1: %.3f G_GAN: %.3f G_perc: %.3f",
                     epoch + 1,
-                    epoch_iters,
+                    epoch_samples,
                     time_per_img,
                     lr_g,
                     float(d_loss.item()),
@@ -452,7 +451,7 @@ def main():
                 )
                 run_logger.append_loss(
                     epoch=epoch + 1,
-                    step=epoch_iters,
+                    step=int(epoch_samples),
                     losses={
                         "D": float(d_loss.item()),
                         "G": float(g_loss.item()),

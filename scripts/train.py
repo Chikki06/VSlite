@@ -30,6 +30,7 @@ from util.save_schedule import make_iter_schedule
 from util.unified_tb import build_unified_writer
 from util.visualizer import Visualizer
 from util.eval_caps import eval_max_batches_train, eval_max_batches_val, eval_max_batches_test
+from util.run_logger import should_log_epoch_samples
 
 os.environ["WANDB_MODE"] = "dryrun"
 
@@ -127,7 +128,7 @@ for epoch in iter_counter.training_epochs():
 
         trainer.run_discriminator_one_step(data_i)
 
-        if iter_counter.needs_printing():
+        if should_log_epoch_samples(iter_counter.epoch_iter, opt.batch_size, opt.print_freq):
             losses = trainer.get_latest_losses()
             visualizer.print_current_errors(
                 epoch,

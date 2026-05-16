@@ -220,6 +220,13 @@ class VSDataset(BaseDataset):
             'Used only when phase==val. Samples in test.txt always take precedence.',
         )
         parser.add_argument(
+            '--test_includes_val',
+            action='store_true',
+            default=False,
+            help='If set, the test split is the union of test.txt and val.txt sample ids. '
+            'Only affects phase=="test"; train and val behavior are unchanged.',
+        )
+        parser.add_argument(
             '--split_seed',
             type=int,
             default=1337,
@@ -285,8 +292,33 @@ class VSDataset(BaseDataset):
             else:
                 test_samples = (exact, sorted(prefixes))
 
+        # Preload val rules so the test filter can optionally include them
+        # (when opt.test_includes_val is set, the "test" split is test.txt ∪ val.txt).
+        # The same rules are reused for the train/val split block below.
+        val_list_path_pre = str(getattr(opt, "val_list_path", "") or "").strip()
+        if val_list_path_pre == "":
+            v_candidate = os.path.join(opt.dataroot, "val.txt")
+            val_list_path_pre = v_candidate if os.path.isfile(v_candidate) else ""
+
+        val_samples_pre = None
+        if val_list_path_pre != "" and os.path.isfile(val_list_path_pre):
+            v_exact = set()
+            v_prefixes = set()
+            with open(val_list_path_pre, "r", encoding="utf-8") as f:
+                for raw in f.read().splitlines():
+                    s = raw.strip()
+                    if not s or s.startswith("#"):
+                        continue
+                    if "-" in s:
+                        v_exact.add(s)
+                    else:
+                        v_prefixes.add(s)
+            if len(v_exact) > 0 or len(v_prefixes) > 0:
+                val_samples_pre = (v_exact, sorted(v_prefixes))
+
         if test_samples is not None:
             phase = str(getattr(opt, "phase", "train") or "train").strip().lower()
+            test_includes_val = bool(getattr(opt, "test_includes_val", False))
 
             def _sample_id_from_path(p: str) -> str:
                 base = os.path.splitext(os.path.basename(p))[0]
@@ -294,10 +326,18 @@ class VSDataset(BaseDataset):
 
             exact, prefixes = test_samples
 
+            if phase == "test" and test_includes_val and val_samples_pre is not None:
+                v_exact, v_prefixes = val_samples_pre
+                exact_eff: set = set(exact) | set(v_exact)
+                prefixes_eff: list = sorted(set(prefixes) | set(v_prefixes))
+            else:
+                exact_eff = exact
+                prefixes_eff = prefixes
+
             def _in_test(sid: str) -> bool:
-                if sid in exact:
+                if sid in exact_eff:
                     return True
-                for pfx in prefixes:
+                for pfx in prefixes_eff:
                     if sid.startswith(pfx):
                         return True
                 return False

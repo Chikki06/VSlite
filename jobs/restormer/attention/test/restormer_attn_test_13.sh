@@ -5,8 +5,8 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --time=12:00:00
-#SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite/Restormer
+#SBATCH --time=24:00:00
+#SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
 #SBATCH --mail-type=END,FAIL
@@ -16,32 +16,31 @@ source ~/.bashrc
 conda activate torchenv
 
 export PYTHONUNBUFFERED=1
+export WANDB_MODE="disabled"
+export VSLITE_CONVNEXT_FID_CKPT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5"
+export VSLITE_INFER_BS="${VSLITE_INFER_BS:-16}"
+
 VSLITE_ROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
-RESTORMER_DIR="${VSLITE_ROOT}/Restromer"
-TEST_SCRIPT="${RESTORMER_DIR}/test_i2i_restormer.py"
+TEST_SCRIPT="${VSLITE_ROOT}/Restormer/test_i2i_restormer.py"
 DATAROOT="${VSLITE_ROOT}/dataset/data_frozen"
-# Matches train/restormer_attn_13.sh (perceptual) and output ckpt_latest.pth
-CONFIG_FILE="${RESTORMER_DIR}/config_i2i_restormer_perceptual.yaml"
+CONFIG_FILE="${VSLITE_ROOT}/Restormer/config_i2i_restormer_perceptual.yaml"
 export RESTORMER_OUTPUT_DIR="${VSLITE_ROOT}/results/restormer_i2i/a13"
 export RESTORMER_DATAROOT="${DATAROOT}"
 export RESTORMER_INPUT_MODE="irvis13"
 
-CKPT_PATH="${RESTORMER_CKPT_PATH:-${RESTORMER_OUTPUT_DIR}/ckpt_epoch_30.pth}"
-if [[ ! -f "$CKPT_PATH" ]]; then
-  CKPT_PATH="${RESTORMER_OUTPUT_DIR}/ckpt_latest.pth"
-fi
+CKPT_PATH="${RESTORMER_CKPT_PATH:-${RESTORMER_OUTPUT_DIR}/ckpt_latest.pth}"
 
-# WSI inference first (only skipped when SKIP_WSI=1)
 WSI_PARENT="${VSLITE_ROOT}/input/IR"
 TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/a13"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 NUM_TEST="${NUM_TEST:-75000}"
+FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-$NUM_TEST}"
 
 mkdir -p "$PRED_WSI_DIR"
 
 SKIP_WSI="${SKIP_WSI:-1}"
 if [[ "$SKIP_WSI" != "1" ]]; then
-  python infer_wsi_png.py \
+  python "${VSLITE_ROOT}/Restormer/infer_wsi_png.py" \
     --ckpt "$CKPT_PATH" \
     --config "$CONFIG_FILE" \
     --model 1 \
@@ -57,26 +56,34 @@ else
   echo "SKIP_WSI=1: skipping WSI inference + WSI metrics."
 fi
 
-# Patch eval + metrics on TEST split (OOD)
-PATCH_OUT_DIR="${TEST_ROOT}/patch_eval_test"
 python "$TEST_SCRIPT" \
   --config "$CONFIG_FILE" \
   --ckpt "$CKPT_PATH" \
   --split "test" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
+  --fid_max_items "$FID_MAX_ITEMS" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \
-  --out_dir "$PATCH_OUT_DIR"
+  --out_dir "${TEST_ROOT}/patch_eval_test"
 
-# Patch eval + metrics on TRAIN split (in-distribution)
+python "$TEST_SCRIPT" \
+  --config "$CONFIG_FILE" \
+  --ckpt "$CKPT_PATH" \
+  --split "val" \
+  --num_samples 20 \
+  --fid_max_items "$FID_MAX_ITEMS" \
+  --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
+  --save_every "${PATCH_SAVE_EVERY:-0}" \
+  --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \
+  --out_dir "${TEST_ROOT}/patch_eval_val"
+
 python "$TEST_SCRIPT" \
   --config "$CONFIG_FILE" \
   --ckpt "$CKPT_PATH" \
   --split "train" \
   --num_samples 20 \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
+  --fid_max_items "$FID_MAX_ITEMS" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}" \

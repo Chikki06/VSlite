@@ -106,6 +106,7 @@ class VSLiteI2IDataset(Dataset):
         indices: Optional[Sequence[int]] = None,
         test_list_path: Optional[str] = None,
         val_list_path: Optional[str] = None,
+        test_includes_val: bool = False,
     ):
         self.dataroot = dataroot
         self.input_mode = input_mode
@@ -155,7 +156,16 @@ class VSLiteI2IDataset(Dataset):
                 exact, prefixes = test_rules
                 # Reserve all patches from listed samples into the test split.
                 if split == "test":
-                    names = [n for n in names if _in_split(_parse_sample_id(n), exact, prefixes)]
+                    if bool(test_includes_val) and val_rules is not None:
+                        v_exact, v_prefixes = val_rules
+                        merged_exact = set(exact) | set(v_exact)
+                        merged_prefixes = sorted(set(prefixes) | set(v_prefixes))
+                        names = [
+                            n for n in names
+                            if _in_split(_parse_sample_id(n), merged_exact, merged_prefixes)
+                        ]
+                    else:
+                        names = [n for n in names if _in_split(_parse_sample_id(n), exact, prefixes)]
                 else:
                     # Remove all test-listed samples first.
                     names = [n for n in names if not _in_split(_parse_sample_id(n), exact, prefixes)]

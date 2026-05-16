@@ -5,6 +5,11 @@ plotting tools (``util/plot_loss_curves.py``) keep working.
 
 Used by training scripts that previously had no on-disk text logs (SwinGAN,
 NAFNet, Restormer, VQGAN, I2SB wrapper, BBDM wrapper).
+
+**Unified ``loss_log.txt`` convention:** the ``step`` argument to ``append_loss``
+is always **training samples processed in the current epoch** (resets to 0 at
+each epoch start), matching ``util/iter_counter.py`` ``epoch_iter`` / baseline
+pix2pix. Use :func:`should_log_epoch_samples` for print cadence.
 """
 
 from __future__ import annotations
@@ -12,6 +17,22 @@ from __future__ import annotations
 import os
 import time
 from typing import Any, Mapping, Optional
+
+# Default match baseline ``TrainOptions.print_freq`` and historical VQGAN hard-code.
+DEFAULT_TRAIN_LOG_PRINT_FREQ = 100
+
+
+def should_log_epoch_samples(epoch_samples: int, last_batch_size: int, print_freq: int) -> bool:
+    """True when a text log line should be emitted for this batch (epoch-local).
+
+    After processing a batch, ``epoch_samples`` is the total samples seen this
+    epoch and ``last_batch_size`` is that batch's size. Mirrors baseline
+    ``(steps % print_freq) < batch_size`` but scoped per epoch so ``iters`` in
+    ``loss_log.txt`` rises to ~dataset size then resets each epoch.
+    """
+    if print_freq <= 0:
+        return False
+    return (int(epoch_samples) % int(print_freq)) < int(last_batch_size)
 
 
 class RunLogger:
@@ -72,6 +93,11 @@ class RunLogger:
         lr: Optional[float] = None,
         time_per_iter: Optional[float] = None,
     ) -> None:
+        """Append one line to ``loss_log.txt``.
+
+        ``step`` must be **epoch-local**: number of training samples processed
+        so far this epoch (not a global step across epochs).
+        """
         self._ensure_loss_header()
         parts = [f"(epoch: {int(epoch)}, iters: {int(step)}"]
         if time_per_iter is not None:

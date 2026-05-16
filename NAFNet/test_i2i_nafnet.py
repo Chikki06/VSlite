@@ -99,6 +99,7 @@ def main():
         split_seed=int(getattr(cfg, "split_seed", 1337)),
         split_fracs=split_fracs,
         max_items=getattr(cfg, "max_items", None),
+        test_includes_val=(args.split == "test"),
     )
     loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=0)
 

@@ -5,7 +5,7 @@
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
@@ -16,6 +16,9 @@ source ~/.bashrc
 conda activate torchenv
 
 export PYTHONUNBUFFERED=1
+export WANDB_MODE="disabled"
+export VSLITE_CONVNEXT_FID_CKPT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5"
+export VSLITE_INFER_BS="${VSLITE_INFER_BS:-16}"
 export SWINGAN_INPUT_MODE="irvis13"
 export SWINGAN_DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
 
@@ -25,17 +28,16 @@ SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan_i2i/${SW
 CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_attention.yaml"
 
 CKPT_PATH="${SWINGAN_CKPT_PATH:-${SWINGAN_OUTPUT_DIR}/ckpt_latest.pth}"
-# Evaluate 50k HE patches from predicted WSI(s)
+# Default to 75k patches (override: NUM_TEST=0 for full split; NUM_TEST=100 for quick debug)
 NUM_TEST="${NUM_TEST:-75000}"
-SWINGAN_TEST_SPLIT="test"
+FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-$NUM_TEST}"
 WSI_PARENT="${VSLITE_DIR}/input/IR"
 TEST_ROOT="${VSLITE_DIR}/results/swingan_i2i/test/${SWINGAN_RUN_TAG}"
-PATCH_OUT_DIR="${TEST_ROOT}/patch_eval_test"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 
 mkdir -p "$PRED_WSI_DIR"
 
-# WSI inference first (only skipped when SKIP_WSI=1)
+# WSI inference is opt-in (default SKIP_WSI=1, matching the baseline_13 pattern)
 SKIP_WSI="${SKIP_WSI:-1}"
 if [[ "$SKIP_WSI" != "1" ]]; then
   python infer_wsi_png.py \
@@ -54,14 +56,14 @@ else
   echo "SKIP_WSI=1: skipping WSI inference + WSI metrics."
 fi
 
-# Patch eval + metrics (fast, standardized). This runs even when SKIP_WSI=1.
+# Patch eval + metrics on TEST split (OOD)
 python test_i2i.py \
   --config "$CONFIG_PATH" \
   --ckpt "$CKPT_PATH" \
   --num_samples 20 \
-  --split "$SWINGAN_TEST_SPLIT" \
-  --out_dir "$PATCH_OUT_DIR" \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
+  --split "test" \
+  --out_dir "${TEST_ROOT}/patch_eval_test" \
+  --fid_max_items "$FID_MAX_ITEMS" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}"
@@ -73,7 +75,7 @@ python test_i2i.py \
   --num_samples 20 \
   --split "train" \
   --out_dir "${TEST_ROOT}/patch_eval_train" \
-  --fid_max_items "${VSLITE_FID_MAX_ITEMS:-75000}" \
+  --fid_max_items "$FID_MAX_ITEMS" \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --save_every "${PATCH_SAVE_EVERY:-0}" \
   --save_palette_every "${PATCH_PALETTE_EVERY:-0}"

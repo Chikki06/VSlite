@@ -22,7 +22,7 @@ from SwinGAN.utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
 from NAFNet.model_utils import build_model, build_split_fracs, load_config
 from util.atomic_io import atomic_torch_save
 from util.fixed_preview import gather_fixed_preview_batch
-from util.run_logger import RunLogger
+from util.run_logger import RunLogger, should_log_epoch_samples
 from util.sample_grid import save_unified_sample, split_batch_to_list
 from util.save_schedule import make_iter_schedule
 from util.unified_tb import build_unified_writer
@@ -158,6 +158,7 @@ def main():
         train_ds,
         batch_size=int(cfg.batch_size),
         shuffle=True,
+        drop_last=True,
         num_workers=int(cfg.train_num_workers),
         pin_memory=(device.type == "cuda"),
         persistent_workers=int(cfg.train_num_workers) > 0,
@@ -334,6 +335,7 @@ def main():
         model.train()
         epoch_start_time = time.time()
         last_iter_time = time.time()
+        epoch_samples = 0
 
         for _batch_idx, batch in enumerate(train_loader):
             x = batch["x"].to(device=device, dtype=torch.float32)
@@ -368,11 +370,11 @@ def main():
             last_iter_time = current_time
 
             global_step += 1
-            total_img_steps = global_step * batch_size
-            if print_freq > 0 and (total_img_steps % print_freq) < batch_size:
+            epoch_samples += int(batch_size)
+            if print_freq > 0 and should_log_epoch_samples(epoch_samples, int(batch_size), int(print_freq)):
                 lr_now = float(optimizer.param_groups[0]["lr"])
                 log_str = "(epoch: {}, iters: {}, time: {:.3f}, lr: {:.6f}) L1: {:.4f}".format(
-                    epoch + 1, total_img_steps, time_per_img, lr_now, float(loss_l1.item())
+                    epoch + 1, epoch_samples, time_per_img, lr_now, float(loss_l1.item())
                 )
                 losses_for_log = {"L1": float(loss_l1.item())}
                 if perceptual_loss_fn is not None:
@@ -381,7 +383,7 @@ def main():
                 logger.info(log_str)
                 run_logger.append_loss(
                     epoch=epoch + 1,
-                    step=total_img_steps,
+                    step=int(epoch_samples),
                     losses=losses_for_log,
                     lr=lr_now,
                     time_per_iter=time_per_img,

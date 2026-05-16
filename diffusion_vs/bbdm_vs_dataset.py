@@ -46,6 +46,7 @@ class VSliteAlignedNPYDataset(Dataset):
             split=split,
             input_nc=int(getattr(dataset_config, "input_nc")),
             num_ir_channels=int(getattr(dataset_config, "num_ir_channels", 10)),
+            test_includes_val=bool(getattr(dataset_config, "test_includes_val", False)),
         )
         self._cond_to_rgb = CondToRGB(int(getattr(dataset_config, "input_nc"))).eval()
 

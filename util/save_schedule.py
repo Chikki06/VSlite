@@ -35,6 +35,15 @@ def make_iter_schedule(
     - ``step_idx == total_iters - 1`` (end of run)
     - ``(step_idx + 1) % period == 0`` where
       ``period = max(1, total_iters // target_saves)``
+
+    The end-of-run anchor is intentionally ``==`` (not ``>=``). On resume, the
+    schedule is rebuilt from the current run's CLI args while ``global_step``
+    is loaded from the checkpoint. If anything shrinks the computed total
+    (e.g. ``batch_size`` was increased, or ``--epochs`` was lowered) then
+    ``step_idx`` can land past ``last`` from the very first step — a ``>=``
+    anchor would then fire on every single training step. Using ``==``
+    contains the anchor to a single iteration and lets the periodic check
+    drive cadence beyond ``last``.
     """
     period = _schedule_period(total_iters, target_saves)
     last = max(0, int(total_iters) - 1)
@@ -42,7 +51,7 @@ def make_iter_schedule(
     def _should(step_idx: int) -> bool:
         if step_idx <= 0:
             return True
-        if step_idx >= last:
+        if step_idx == last:
             return True
         return ((step_idx + 1) % period) == 0
 
@@ -55,7 +64,8 @@ def make_epoch_schedule(
 ) -> Callable[[int], bool]:
     """Return ``should_save(epoch_idx)`` for an epoch-counted loop.
 
-    ``epoch_idx`` is 0-based.
+    ``epoch_idx`` is 0-based. See :func:`make_iter_schedule` for the reason
+    the end anchor is ``==`` rather than ``>=`` (resume-safety).
     """
     period = _schedule_period(total_epochs, target_saves)
     last = max(0, int(total_epochs) - 1)
@@ -63,7 +73,7 @@ def make_epoch_schedule(
     def _should(epoch_idx: int) -> bool:
         if epoch_idx <= 0:
             return True
-        if epoch_idx >= last:
+        if epoch_idx == last:
             return True
         return ((epoch_idx + 1) % period) == 0
 

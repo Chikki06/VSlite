@@ -1,4 +1,15 @@
+"""Whole-slide PNG inference using Restormer i2i checkpoints.
+
+Uses the lazy WSI loader + tile-windowed read helpers from
+`SwinGAN.infer_wsi_png` so the WSI is never fully materialized in host RAM
+or GPU memory; only one tile-sized tensor crosses device boundaries at a
+time. See the docstring in `SwinGAN/infer_wsi_png.py` for the rationale.
+"""
+
+from __future__ import annotations
+
 import argparse
+import gc
 import math
 import os
 import sys
@@ -6,10 +17,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from PIL import Image
 import torch
 import torch.nn.functional as F
 import yaml
+from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -24,8 +35,14 @@ _SWINGAN_DIR = _VSLITE_ROOT / "SwinGAN"
 if str(_SWINGAN_DIR) not in sys.path:
     sys.path.insert(0, str(_SWINGAN_DIR))
 
-from SwinGAN.infer_wsi_png import VSLiteFolderLoader, FolderData
-from train_i2i_restormer import build_model
+from SwinGAN.infer_wsi_png import (  # noqa: E402
+    FolderData,
+    VSLiteFolderLoader,
+    output_geometry,
+    read_ir_tile_to_device,
+    read_vis_tile_to_device,
+)
+from train_i2i_restormer import build_model  # noqa: E402
 
 
 def load_config(path: str) -> SimpleNamespace:
@@ -45,19 +62,6 @@ def build_restorer(config_path: str, ckpt_path: str, model_type: int, device: to
     return model, cfg
 
 
-def _prep_vis(vis: torch.Tensor, vis_pixel_size: float) -> torch.Tensor:
-    # Mirror SwinGAN script pixel-size resampling.
-    target_pixel_size = 0.69
-    scale = float(vis_pixel_size) / target_pixel_size
-    _, h, w = vis.shape
-    new_h = max(1, int(h * scale))
-    new_w = max(1, int(w * scale))
-    vis_resized = F.interpolate(
-        vis.unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False
-    ).squeeze(0)
-    return vis_resized.clamp(0.0, 1.0)
-
-
 def infer_folder(
     model,
     data: FolderData,
@@ -65,62 +69,56 @@ def infer_folder(
     tile_size: int,
     device: torch.device,
 ) -> np.ndarray:
-    # Keep same geometry as SwinGAN/infer_wsi_png.py
-    scaling_factor = 0.69 / 2.0
-
-    ir = data.ir.to(device=device, dtype=torch.float32)
-    if model_type == 1:
-        if data.vis is None or data.vis_pixel_size is None:
-            raise RuntimeError("13ch mode requires VIS data")
-        vis = _prep_vis(data.vis.to(device=device, dtype=torch.float32), data.vis_pixel_size)
-        _, r, c = vis.shape
-    else:
-        _, h_ir, w_ir = ir.shape
-        ratio = 2.0 / 0.69
-        r = int(h_ir * ratio)
-        c = int(w_ir * ratio)
-        vis = None
+    r, c = output_geometry(data, model_type)
 
     rn = int(math.ceil(r / tile_size))
     cn = int(math.ceil(c / tile_size))
 
-    # Use uint8 backing store to reduce peak RAM on very large slides.
-    out = np.zeros((3, rn * tile_size + 1, cn * tile_size + 1), dtype=np.uint8)
+    out = np.zeros((rn * tile_size + 1, cn * tile_size + 1, 3), dtype=np.uint8)
     I = list(range(0, rn * tile_size + 1, tile_size))
     J = list(range(0, cn * tile_size + 1, tile_size))
 
     with torch.no_grad():
         for ii in range(len(I) - 1):
             for jj in range(len(J) - 1):
-                ir_patch = ir[
-                    :,
-                    int(I[ii] * scaling_factor) : int(I[ii + 1] * scaling_factor),
-                    int(J[jj] * scaling_factor) : int(J[jj + 1] * scaling_factor),
-                ]
-                target_lr = int(tile_size * scaling_factor)
-                pad_rows = max(0, target_lr - ir_patch.shape[1])
-                pad_cols = max(0, target_lr - ir_patch.shape[2])
-                ir_patch = F.pad(ir_patch.unsqueeze(0), (0, pad_cols, 0, pad_rows), mode="constant", value=0.0)
-                ir_patch = F.interpolate(ir_patch, size=(tile_size, tile_size), mode="bicubic", align_corners=True)
+                ir_patch = read_ir_tile_to_device(
+                    data,
+                    y0_tgt=I[ii],
+                    y1_tgt=I[ii + 1],
+                    x0_tgt=J[jj],
+                    x1_tgt=J[jj + 1],
+                    tile_size=tile_size,
+                    device=device,
+                )
 
-                if model_type == 1:
-                    vis_patch = vis[:, int(I[ii]) : int(I[ii + 1]), int(J[jj]) : int(J[jj + 1])]
-                    v_pad_rows = max(0, tile_size - vis_patch.shape[1])
-                    v_pad_cols = max(0, tile_size - vis_patch.shape[2])
-                    vis_patch = F.pad(
-                        vis_patch.unsqueeze(0), (0, v_pad_cols, 0, v_pad_rows), mode="constant", value=0.0
+                if int(model_type) == 1:
+                    vis_patch = read_vis_tile_to_device(
+                        data,
+                        y0_tgt=I[ii],
+                        y1_tgt=I[ii + 1],
+                        x0_tgt=J[jj],
+                        x1_tgt=J[jj + 1],
+                        tile_size=tile_size,
+                        device=device,
                     )
                     x = torch.cat([ir_patch, vis_patch], dim=1)
                 else:
+                    vis_patch = None
                     x = ir_patch
 
                 y_hat = torch.tanh(model(x))
                 y_np = (y_hat[0].clamp(-1.0, 1.0).cpu().numpy() * 0.5) + 0.5
                 y_u8 = np.clip(y_np * 255.0, 0, 255).astype(np.uint8)
-                out[:, I[ii] : I[ii + 1], J[jj] : J[jj + 1]] = y_u8
+                out[I[ii] : I[ii + 1], J[jj] : J[jj + 1], :] = np.transpose(y_u8, (1, 2, 0))
 
-    out = out[:, :r, :c]
-    out = np.transpose(out, (1, 2, 0))
+                del ir_patch, x, y_hat, y_np, y_u8
+                if vis_patch is not None:
+                    del vis_patch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            gc.collect()
+
+    out = out[:r, :c, :]
     return out
 
 
@@ -168,7 +166,7 @@ def main() -> None:
         raise ValueError("Provide --folder or --parent_folder")
 
     for folder_name in folder_names:
-        print(f"Processing {folder_name} ...")
+        print(f"Processing {folder_name} ...", flush=True)
         loader = VSLiteFolderLoader(parent, folder_name, args.model)
         data = loader.load()
         pred = infer_folder(model, data, args.model, tile_size=tile_size, device=device)
@@ -176,9 +174,8 @@ def main() -> None:
         suffix = "13ch" if int(args.model) == 1 else "10ch"
         out_path = os.path.join(output_dir, f"{folder_name}_{suffix}.png")
         Image.fromarray(pred).save(out_path)
-        print(f"Saved: {out_path}")
+        print(f"Saved: {out_path}", flush=True)
 
 
 if __name__ == "__main__":
     main()
-

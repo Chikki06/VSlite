@@ -98,6 +98,14 @@ def main() -> None:
     # Build dataset directly from registry (runner utility).
     from Register import Registers  # type: ignore
 
+    # When evaluating on the test split, include val.txt sample ids as part of test.
+    # This is read by `VSliteAlignedNPYDataset` via `getattr(dataset_config, "test_includes_val", False)`.
+    if str(args.split) == "test":
+        try:
+            setattr(nconfig.data.dataset_config, "test_includes_val", True)
+        except Exception:
+            pass
+
     ds = Registers.datasets[nconfig.data.dataset_type](nconfig.data.dataset_config, stage=("train" if args.split == "train" else "test"))
 
     out_dir = os.path.join(

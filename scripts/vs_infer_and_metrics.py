@@ -119,7 +119,13 @@ def main():
     opt.no_flip_vert = True
     opt.no_rotate = True
     opt.num_test = float("inf") if args.num_test <= 0 else int(args.num_test)
-    opt.batch_size = 1
+    # Combine test.txt and val.txt into a single held-out set for FID/PSNR/SSIM
+    # when running on the test split. Train phase semantics are unchanged.
+    opt.test_includes_val = bool(args.split == "test")
+    # Allow larger inference batches to better utilize big GPUs (e.g., 80GB A100).
+    # Default to 16, overrideable via VSLITE_INFER_BS.
+    infer_bs = int(os.environ.get("VSLITE_INFER_BS", "16"))
+    opt.batch_size = max(1, infer_bs)
 
     dataset = create_dataloader(opt)
     model = create_model(opt)

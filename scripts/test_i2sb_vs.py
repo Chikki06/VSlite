@@ -104,6 +104,7 @@ def main() -> None:
         split=str(args.split),
         input_nc=int(args.input_nc),
         num_ir_channels=int(args.num_ir_channels),
+        test_includes_val=(str(args.split) == "test"),
     )
 
     # Output layout: results_dir/test/<run>/patch_eval_test

@@ -14,13 +14,14 @@ import sys
 from pathlib import Path
 
 import torch
+from torch.utils.data import DataLoader
 
 _THIS_DIR = Path(__file__).resolve().parent
 _VSLITE_ROOT = _THIS_DIR.parent
 if str(_VSLITE_ROOT) not in sys.path:
     sys.path.insert(0, str(_VSLITE_ROOT))
 
-from diffusion_vs.vqgan_vs import VQGANHEDataset, import_third_party_vqgan
+from diffusion_vs.vqgan_vs import VQGANHEDataset, collate_vqgan_batch, import_third_party_vqgan
 from util.i2i_metrics import compute_metrics_streaming
 
 
@@ -40,6 +41,12 @@ def main() -> None:
     ap.add_argument("--num_test", type=int, default=75000)
     ap.add_argument("--fid_max_items", type=int, default=None)
     ap.add_argument("--fid_batch_size", type=int, default=16)
+    ap.add_argument(
+        "--infer_batch_size",
+        type=int,
+        default=int(os.environ.get("VSLITE_INFER_BS", "16")),
+        help="Mini-batch size for the VQGAN forward pass (DataLoader batch_size). Overridable via VSLITE_INFER_BS.",
+    )
     ap.add_argument("--gpu", type=int, default=0)
     args = ap.parse_args()
 
@@ -78,25 +85,38 @@ def main() -> None:
         input_nc=int(args.input_nc),
         num_ir_channels=int(args.num_ir_channels),
         image_size=int(args.image_size),
+        test_includes_val=(str(args.split) == "test"),
     )
 
     patch_eval_leaf = "patch_eval_test" if args.split == "test" else "patch_eval_train"
     out_dir = os.path.join(str(Path(args.results_dir).resolve()), "test", args.name, patch_eval_leaf)
     os.makedirs(out_dir, exist_ok=True)
 
+    infer_bs = max(1, int(args.infer_batch_size))
+    loader = DataLoader(
+        ds,
+        batch_size=infer_bs,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=collate_vqgan_batch,
+    )
+
     def _pairs():
         n_seen = 0
-        for i in range(len(ds)):
+        for batch in loader:
             if args.num_test > 0 and n_seen >= int(args.num_test):
                 break
-            b = ds[i]
-            x = b.x_he.unsqueeze(0).to(device=device, dtype=torch.float32)
+            x = batch.x_he.to(device=device, dtype=torch.float32)
             with torch.no_grad():
                 decoded, _z, _q = vqgan(x)
-            y = x[0].detach().cpu()
-            yhat = decoded[0].detach().cpu()
-            n_seen += 1
-            yield (y, yhat)
+            B = int(x.size(0))
+            for j in range(B):
+                if args.num_test > 0 and n_seen >= int(args.num_test):
+                    break
+                y = x[j].detach().cpu()
+                yhat = decoded[j].detach().cpu()
+                n_seen += 1
+                yield (y, yhat)
 
     res = compute_metrics_streaming(
         pairs=_pairs(),

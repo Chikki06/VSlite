@@ -33,7 +33,16 @@ class VQGANHEDataset(Dataset):
     Dataset for training/testing a VQGAN autoencoder on H&E targets.
     """
 
-    def __init__(self, *, dataroot: str, split: str, input_nc: int, num_ir_channels: int = 10, image_size: int | None = None):
+    def __init__(
+        self,
+        *,
+        dataroot: str,
+        split: str,
+        input_nc: int,
+        num_ir_channels: int = 10,
+        image_size: int | None = None,
+        test_includes_val: bool = False,
+    ):
         super().__init__()
         self.base = VSliteVSDiffusionDataset(
             dataroot=dataroot,
@@ -41,6 +50,7 @@ class VQGANHEDataset(Dataset):
             input_nc=input_nc,
             num_ir_channels=num_ir_channels,
             image_size=image_size,
+            test_includes_val=bool(test_includes_val),
         )
 
     def __len__(self) -> int:

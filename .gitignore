@@ -94,6 +94,7 @@ events.out.tfevents.*
 
 # Project Specific Directories (Results, Data, Logs)
 results/
+results_old/
 dataset/data_1024/
 dataset/data_frozen/
 input/IR/

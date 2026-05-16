@@ -3,10 +3,10 @@
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
 #SBATCH --gpus=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=12:00:00
-#SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN
+#SBATCH --time=24:00:00
+#SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
 #SBATCH --mail-type=END,FAIL
@@ -17,18 +17,21 @@ conda activate torchenv
 
 export PYTHONUNBUFFERED=1
 
-VSLITE_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
-INPUT_PARENT="${VSLITE_DIR}/input/IR"
+VSLITE_ROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
+WSI_PARENT="${VSLITE_ROOT}/input/IR"
+RESULTS_DIR="${VSLITE_ROOT}/results/swingan_i2i"
 RUN_TAG="b13"
-OUT_DIR="${VSLITE_DIR}/tests/swingan_i2i/${RUN_TAG}/wsi_latest"
 
-CKPT_PATH="${SWINGAN_CKPT_PATH:-${VSLITE_DIR}/results/swingan_i2i/${RUN_TAG}/ckpt_latest.pth}"
-CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_baseline.yaml"
+CKPT_PATH="${SWINGAN_CKPT_PATH:-${RESULTS_DIR}/${RUN_TAG}/ckpt_latest.pth}"
+CONFIG_PATH="${VSLITE_ROOT}/SwinGAN/config_i2i_baseline.yaml"
 
-python infer_wsi_png.py \
+OUT_DIR="${RESULTS_DIR}/test/${RUN_TAG}/wsi_pred"
+mkdir -p "$OUT_DIR"
+
+python "${VSLITE_ROOT}/SwinGAN/infer_wsi_png.py" \
   --ckpt "$CKPT_PATH" \
   --config "$CONFIG_PATH" \
   --model 1 \
-  --parent_folder "$INPUT_PARENT" \
-  --output_dir "$OUT_DIR"
-
+  --parent_folder "$WSI_PARENT" \
+  --output_dir "$OUT_DIR" \
+  --tile_size "${WSI_TILE_SIZE:-512}"

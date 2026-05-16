@@ -84,7 +84,7 @@ def get_activations(model, x):
 class FIDEvaluator(BaseEvaluator):
     @staticmethod
     def modify_commandline_options(parser, is_train):
-        parser.add_argument("--FID_max_num_samples", default=50000, type=int)
+        parser.add_argument("--FID_max_num_samples", default=75000, type=int)
         parser.add_argument(
             '--cache_dir', type=str, default=os.path.join(DIR_PATH, 'cache')
         )

@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import yaml
 from torch.cuda.amp import GradScaler, autocast
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 
 _THIS_DIR = Path(__file__).resolve().parent
@@ -24,7 +24,7 @@ from SwinGAN.utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
 from basicsr.models.archs.restormer_arch import Restormer
 from util.atomic_io import atomic_torch_save
 from util.fixed_preview import gather_fixed_preview_batch
-from util.run_logger import RunLogger
+from util.run_logger import RunLogger, should_log_epoch_samples
 from util.sample_grid import save_unified_sample, split_batch_to_list
 from util.save_schedule import make_iter_schedule
 from util.unified_tb import build_unified_writer
@@ -188,6 +188,7 @@ def main():
         train_ds,
         batch_size=int(cfg.batch_size),
         shuffle=True,
+        drop_last=True,
         num_workers=int(cfg.train_num_workers),
         pin_memory=(device.type == "cuda"),
         persistent_workers=int(cfg.train_num_workers) > 0,
@@ -272,7 +273,9 @@ def main():
     eval_val_max = int(eval_max_items_val(getattr(cfg, "eval_max_items_val", 512)))
     eval_test_max = int(eval_max_items_test(getattr(cfg, "eval_max_items_test", 512)))
 
-    test_ds = VSLiteI2IDataset(
+    # Build the split first, then subset using indices derived from that split's length.
+    # (Previously this used indices based on len(train_ds), which can exceed the test split size.)
+    _test_base_ds = VSLiteI2IDataset(
         cfg.dataroot,
         input_mode=cfg.input_mode,
         num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
@@ -282,8 +285,12 @@ def main():
         split_seed=int(getattr(cfg, "split_seed", 1337)),
         split_fracs=split_fracs,
         max_items=getattr(cfg, "max_items", None),
-        indices=_subset_indices(len(train_ds), eval_test_max, eval_seed) if int(eval_test_max) > 0 else None,
+        indices=None,
     )
+    if int(eval_test_max) > 0:
+        test_ds = Subset(_test_base_ds, _subset_indices(len(_test_base_ds), eval_test_max, eval_seed))
+    else:
+        test_ds = _test_base_ds
     test_loader = DataLoader(
         test_ds,
         batch_size=int(cfg.batch_size),
@@ -366,6 +373,7 @@ def main():
         model.train()
         epoch_start_time = time.time()
         last_iter_time = time.time()
+        epoch_samples = 0
 
         optimizer.zero_grad(set_to_none=True)
         for batch_idx, batch in enumerate(train_loader):
@@ -405,11 +413,11 @@ def main():
             last_iter_time = current_time
 
             global_step += 1
-            total_img_steps = global_step * batch_size
-            if print_freq > 0 and (total_img_steps % print_freq) < batch_size:
+            epoch_samples += int(batch_size)
+            if print_freq > 0 and should_log_epoch_samples(epoch_samples, int(batch_size), int(print_freq)):
                 lr_now = float(optimizer.param_groups[0]["lr"])
                 log_str = "(epoch: {}, iters: {}, time: {:.3f}, lr: {:.6f}) L1: {:.4f}".format(
-                    epoch + 1, total_img_steps, time_per_img, lr_now, float(loss_l1.item())
+                    epoch + 1, epoch_samples, time_per_img, lr_now, float(loss_l1.item())
                 )
                 losses_for_log = {"L1": float(loss_l1.item())}
                 if perceptual_loss_fn is not None:
@@ -418,7 +426,7 @@ def main():
                 logger.info(log_str)
                 run_logger.append_loss(
                     epoch=epoch + 1,
-                    step=total_img_steps,
+                    step=int(epoch_samples),
                     losses=losses_for_log,
                     lr=lr_now,
                     time_per_iter=time_per_img,

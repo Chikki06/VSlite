@@ -3,9 +3,9 @@
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
 #SBATCH --mem=64G
-#SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=71:00:00
+#SBATCH --gpus=1
+#SBATCH --time=3-00:00:00
 #SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite/Restormer
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err
@@ -30,6 +30,9 @@ export UNIFIED_EVAL_MAX_ITEMS_TEST="${UNIFIED_EVAL_MAX_ITEMS_TEST:-512}"
 
 export RESTORMER_INPUT_MODE="irvis13"
 export RESTORMER_OUTPUT_DIR="${VSLITE_DIR}/results/restormer_i2i/a13"
+# B_eff=B_micro*K. ~51/80 GiB @ B=2 (A100 smi) → default B=3 (~70 GiB on 80 GiB H100). B=4: RESTORMER_BATCH_SIZE=4 if ≥94 GiB.
+export RESTORMER_BATCH_SIZE="${RESTORMER_BATCH_SIZE:-3}"
+export RESTORMER_GRAD_ACCUM_STEPS="${RESTORMER_GRAD_ACCUM_STEPS:-8}"
 CONFIG_PATH="${RESTORMER_DIR}/config_i2i_restormer_perceptual.yaml"
 
 python train_i2i_restormer.py --config "$CONFIG_PATH"

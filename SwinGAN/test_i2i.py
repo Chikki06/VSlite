@@ -123,6 +123,12 @@ def main():
     ap.add_argument("--out_dir", type=str, default=None)
     ap.add_argument("--fid_max_items", type=int, default=None)
     ap.add_argument("--fid_batch_size", type=int, default=16)
+    ap.add_argument(
+        "--infer_batch_size",
+        type=int,
+        default=int(os.environ.get("VSLITE_INFER_BS", "16")),
+        help="Mini-batch size for the generator forward pass (DataLoader batch_size). Overridable via VSLITE_INFER_BS.",
+    )
     ap.add_argument("--save_every", type=int, default=0, help="If >0, save standardized PNG triplets every N patches.")
     ap.add_argument("--save_palette_every", type=int, default=0, help="If >0, save a palette preview every N patches.")
     args = ap.parse_args()
@@ -157,8 +163,10 @@ def main():
         split_seed=int(getattr(cfg, "split_seed", 1337)),
         split_fracs=split_fracs,
         max_items=getattr(cfg, "max_items", None),
+        test_includes_val=(args.split == "test"),
     )
-    loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=0)
+    infer_bs = max(1, int(args.infer_batch_size))
+    loader = DataLoader(ds, batch_size=infer_bs, shuffle=False, num_workers=0)
 
     in_chans = 10 if cfg.input_mode == "ir10" else 13
     use_cbam = bool(getattr(cfg, "use_cbam", False))
@@ -171,31 +179,39 @@ def main():
     def _pairs():
         saved = 0
         buf5: list[tuple[str, torch.Tensor, torch.Tensor]] = []
-        for i, batch in enumerate(tqdm(loader, desc="Testing", unit="img")):
+        global_idx = 0
+        for batch in tqdm(loader, desc="Testing", unit="batch"):
             x = batch["x"].to(device=device, dtype=torch.float32)
             y = batch["y"].to(device=device, dtype=torch.float32)
             with torch.no_grad():
                 yhat = torch.tanh(G(x))
 
-            name = batch["name"][0]
-            buf5.append((name, y[0].detach().cpu(), yhat[0].detach().cpu()))
-            if len(buf5) > 5:
-                buf5.pop(0)
+            names = batch["name"]
+            B = int(yhat.size(0))
+            for j in range(B):
+                name = names[j] if isinstance(names, list) else names
+                y_j = y[j].detach().cpu()
+                yhat_j = yhat[j].detach().cpu()
+                buf5.append((name, y_j, yhat_j))
+                if len(buf5) > 5:
+                    buf5.pop(0)
 
-            # Save only palettes (pred + target), in 5-row columns.
-            if saved < args.num_samples:
-                # Save once per 5 samples.
-                if len(buf5) == 5:
+                if saved < args.num_samples and len(buf5) == 5:
                     save_palette5_pred_target_png(out_dir, f"{name}_{saved:03d}", list(buf5), filename_suffix="palette5")
                     saved += 5
 
-            if args.save_palette_every and (i % int(args.save_palette_every) == 0) and len(buf5) == 5:
-                save_palette5_pred_target_png(out_dir, f"{name}_every{i}", list(buf5), filename_suffix="palette5_every")
+                if args.save_palette_every and (global_idx % int(args.save_palette_every) == 0) and len(buf5) == 5:
+                    save_palette5_pred_target_png(
+                        out_dir, f"{name}_every{global_idx}", list(buf5), filename_suffix="palette5_every"
+                    )
 
-            if args.save_every and (i % int(args.save_every) == 0) and len(buf5) == 5:
-                save_palette5_pred_target_png(out_dir, f"{name}_save{i}", list(buf5), filename_suffix="palette5_save")
+                if args.save_every and (global_idx % int(args.save_every) == 0) and len(buf5) == 5:
+                    save_palette5_pred_target_png(
+                        out_dir, f"{name}_save{global_idx}", list(buf5), filename_suffix="palette5_save"
+                    )
 
-            yield (y[0].detach(), yhat[0].detach())
+                global_idx += 1
+                yield (y_j, yhat_j)
 
     res = compute_metrics_streaming(
         pairs=_pairs(),

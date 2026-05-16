@@ -62,6 +62,7 @@ class VSliteVSDiffusionDataset(Dataset):
         num_ir_channels: int = 10,
         image_size: int | None = None,
         max_dataset_size: int = 10**18,
+        test_includes_val: bool = False,
     ) -> None:
         super().__init__()
         if split not in {"train", "val", "test"}:
@@ -82,6 +83,7 @@ class VSliteVSDiffusionDataset(Dataset):
         opt.num_ir_channels = num_ir_channels
         # Ensure VS_dataset applies the same train/val/test split logic.
         opt.phase = split
+        opt.test_includes_val = bool(test_includes_val)
         # Forward to VS_dataset so it can resize patches appropriately.
         if image_size is not None:
             opt.image_size = int(image_size)

@@ -14,7 +14,8 @@ import torch.nn.functional as F
 
 def _default_convnext_fid_ckpt() -> str:
     # Canonical HE-trained ConvNeXt feature checkpoint used in this repo (see diffusion configs).
-    return "/projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_feature.pt"
+    # NOTE: the filename is not ".pt" in this workspace; it's the raw checkpoint name.
+    return "/projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5"
 
 
 class _ConvNeXtTinyFID(nn.Module):
@@ -43,6 +44,17 @@ class _ConvNeXtTinyFID(nn.Module):
         ckpt = (ckpt_path or "").strip() if ckpt_path is not None else ""
         if not ckpt:
             ckpt = os.environ.get("VSLITE_CONVNEXT_FID_CKPT", "").strip() or _default_convnext_fid_ckpt()
+
+        # Allow passing a directory: pick the expected file if present, else any single file in it.
+        if os.path.isdir(ckpt):
+            expected = os.path.join(ckpt, os.path.basename(_default_convnext_fid_ckpt()))
+            if os.path.isfile(expected):
+                ckpt = expected
+            else:
+                files = [os.path.join(ckpt, f) for f in os.listdir(ckpt) if os.path.isfile(os.path.join(ckpt, f))]
+                files.sort()
+                if len(files) == 1:
+                    ckpt = files[0]
 
         if not os.path.isfile(ckpt):
             raise FileNotFoundError(

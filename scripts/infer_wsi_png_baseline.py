@@ -196,7 +196,12 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Output directory for PNG files (default: results_dir/test/<name>/wsi_pred)",
     )
-    p.add_argument("--tile_size", type=int, default=512, help="Tile size for generator inference (pixels)")
+    p.add_argument(
+        "--tile_size",
+        type=int,
+        default=1024,
+        help="Tile size for generator inference (pixels); match `third_party/main.py` (1024) and VS_dataset image_size",
+    )
     return p.parse_args()
 
 
@@ -223,6 +228,17 @@ def _select_ir_indices(c_tot: int, *, num_ir_channels: int, ir_channel_indices: 
             raise ValueError(f"Invalid --num_ir_channels={n} for IR channels={c_tot}")
         return list(range(n)), n
 
+
+def _loader_model_type(input_nc: int, num_ir_channels: int, ir_channel_indices: str) -> int:
+    """0=IR-only loader, 1=load VIS. Must agree with `infer_folder` IR vs IR+VIS split."""
+    s = str(ir_channel_indices or "").strip()
+    if s:
+        n_ir = len(_parse_ir_indices(s))
+    else:
+        n_ir = int(num_ir_channels)
+    return 1 if int(input_nc) == int(n_ir) + 3 else 0
+
+
 def _read_envi_patch_hwc(mm: np.ndarray, *, y0: int, y1: int, x0: int, x1: int) -> np.ndarray:
     # mm is (H, W, C) memmap; slicing stays lazy / windowed.
     y0 = max(0, int(y0))
@@ -230,6 +246,65 @@ def _read_envi_patch_hwc(mm: np.ndarray, *, y0: int, y1: int, x0: int, x1: int) 
     y1 = max(y0, int(y1))
     x1 = max(x0, int(x1))
     return np.asarray(mm[y0:y1, x0:x1, :], dtype=np.float32)
+
+
+def _hwc_to_01_f32(arr: np.ndarray, *, expect_channels: int) -> np.ndarray:
+    """Normalize HWC array to float32 roughly in [0, 1] (matches training `/256` on 8-bit paths)."""
+    if arr.ndim == 2:
+        arr = np.stack([arr] * 3, axis=-1)
+    if arr.ndim != 3:
+        raise RuntimeError(f"VIS patch has invalid shape: {arr.shape}")
+    if arr.shape[2] != expect_channels:
+        if arr.shape[2] > expect_channels:
+            arr = arr[:, :, :expect_channels]
+        else:
+            pad = np.zeros(
+                (arr.shape[0], arr.shape[1], expect_channels - arr.shape[2]),
+                dtype=arr.dtype,
+            )
+            arr = np.concatenate([arr, pad], axis=2)
+    t = arr.astype(np.float32)
+    dt = arr.dtype
+    if dt == np.uint16:
+        t = t * (1.0 / 65535.0)
+    elif dt in (np.float32, np.float64):
+        t = np.clip(t, 0.0, None)
+        mx = float(np.max(t)) if t.size else 0.0
+        if mx > 1.5:
+            t = t / 256.0
+    else:
+        t = t / 256.0
+    return np.clip(t, 0.0, 1.0)
+
+
+def _read_vis_source_crop_hwc(
+    vis_src: object,
+    *,
+    y0s: int,
+    y1s: int,
+    x0s: int,
+    x1s: int,
+    expect_channels: int = 3,
+) -> np.ndarray:
+    """Read VIS pixels from native storage (integer source box), return HWC float32 [0,1]."""
+    y0s = max(0, int(y0s))
+    x0s = max(0, int(x0s))
+    y1s = max(y0s, int(y1s))
+    x1s = max(x0s, int(x1s))
+    if isinstance(vis_src, Image.Image):
+        pw = x1s - x0s
+        ph = y1s - y0s
+        if ph <= 0 or pw <= 0:
+            return np.zeros((0, 0, expect_channels), dtype=np.float32)
+        box = (int(x0s), int(y0s), int(x0s + pw), int(y0s + ph))
+        tile = vis_src.crop(box)
+        if tile.mode not in ("RGB", "RGBA"):
+            tile = tile.convert("RGB")
+        raw = np.asarray(tile)
+    else:
+        # Keep native integer dtype so `_hwc_to_01_f32` can distinguish 8- vs 16-bit ENVI cubes.
+        raw = np.asarray(vis_src[y0s:y1s, x0s:x1s, :])
+    return _hwc_to_01_f32(raw, expect_channels=expect_channels)
 
 
 def _read_vis_patch_to_chw(
@@ -240,37 +315,164 @@ def _read_vis_patch_to_chw(
     x0: int,
     x1: int,
     expect_channels: int = 3,
+    native_hw: Optional[Tuple[int, int]] = None,
+    vis_scale: float = 1.0,
 ) -> torch.Tensor:
-    # Returns float32 CHW in [0,1].
-    if isinstance(vis_src, Image.Image):
-        pw = max(0, int(x1 - x0))
-        ph = max(0, int(y1 - y0))
-        if ph == 0 or pw == 0:
-            arr = np.zeros((0, 0, expect_channels), dtype=np.float32)
-        else:
-            box = (int(x0), int(y0), int(x0 + pw), int(y0 + ph))
-            tile = vis_src.crop(box)
-            if tile.mode not in ("RGB", "RGBA"):
-                tile = tile.convert("RGB")
-            arr_u8 = np.asarray(tile)
-            if arr_u8.ndim == 2:
-                arr_u8 = np.stack([arr_u8] * 3, axis=-1)
-            arr = arr_u8.astype(np.float32) / 256.0
-    else:
-        # ENVI memmap: (H, W, C)
-        arr = _read_envi_patch_hwc(vis_src, y0=y0, y1=y1, x0=x0, x1=x1).astype(np.float32) / 256.0
+    """Return float32 CHW in [0,1] for a tile in *output* (0.69 µm) pixel coordinates.
 
-    if arr.ndim != 3:
-        raise RuntimeError(f"VIS patch has invalid shape: {arr.shape}")
-    if arr.shape[2] != expect_channels:
-        # If VIS has extra bands, keep first 3; if fewer, pad.
-        if arr.shape[2] > expect_channels:
-            arr = arr[:, :, :expect_channels]
-        else:
-            pad = np.zeros((arr.shape[0], arr.shape[1], expect_channels - arr.shape[2]), dtype=arr.dtype)
-            arr = np.concatenate([arr, pad], axis=2)
+    Mirrors `third_party/main.py`, which resamples VIS to 0.69 µm *before* tiling. Here we
+    resample lazily per tile: map output rectangle to native VIS indices, read a window, then
+    `interpolate` to the exact tile footprint when ``vis_scale != 1``.
+    """
+    h_tgt = max(0, int(y1 - y0))
+    w_tgt = max(0, int(x1 - x0))
+    if h_tgt == 0 or w_tgt == 0:
+        return torch.zeros((expect_channels, 0, 0), dtype=torch.float32)
+
+    scale = float(vis_scale) if float(vis_scale) > 0 else 1.0
+    if native_hw is None:
+        # Legacy 1:1 path (native pixels already match the output grid).
+        arr = _read_vis_source_crop_hwc(
+            vis_src, y0s=y0, y1s=y1, x0s=x0, x1s=x1, expect_channels=expect_channels
+        )
+        chw = torch.from_numpy(np.transpose(arr, (2, 0, 1))).contiguous()
+        return chw.clamp(0.0, 1.0)
+
+    vis_h, vis_w = int(native_hw[0]), int(native_hw[1])
+    if abs(scale - 1.0) < 1e-6:
+        y0s = max(0, min(vis_h, y0))
+        y1s = max(y0s, min(vis_h, y1))
+        x0s = max(0, min(vis_w, x0))
+        x1s = max(x0s, min(vis_w, x1))
+        arr = _read_vis_source_crop_hwc(
+            vis_src, y0s=y0s, y1s=y1s, x0s=x0s, x1s=x1s, expect_channels=expect_channels
+        )
+    else:
+        fy0 = float(y0) / scale
+        fy1 = float(y1) / scale
+        fx0 = float(x0) / scale
+        fx1 = float(x1) / scale
+        y0s = max(0, int(math.floor(fy0)))
+        y1s = min(vis_h, max(y0s + 1, int(math.ceil(fy1))))
+        x0s = max(0, int(math.floor(fx0)))
+        x1s = min(vis_w, max(x0s + 1, int(math.ceil(fx1))))
+        arr = _read_vis_source_crop_hwc(
+            vis_src, y0s=y0s, y1s=y1s, x0s=x0s, x1s=x1s, expect_channels=expect_channels
+        )
+
     chw = torch.from_numpy(np.transpose(arr, (2, 0, 1))).contiguous()
+    if chw.shape[1] == 0 or chw.shape[2] == 0:
+        return torch.zeros((expect_channels, h_tgt, w_tgt), dtype=torch.float32)
+    if chw.shape[1] != h_tgt or chw.shape[2] != w_tgt:
+        chw = F.interpolate(
+            chw.unsqueeze(0),
+            size=(h_tgt, w_tgt),
+            mode="bilinear",
+            align_corners=False,
+        ).squeeze(0)
     return chw.clamp(0.0, 1.0)
+
+
+def read_ir_tile_to_device(
+    data: FolderData,
+    *,
+    y0_tgt: int,
+    y1_tgt: int,
+    x0_tgt: int,
+    x1_tgt: int,
+    tile_size: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """Read IR from ENVI memmap and return (1, C, tile_size, tile_size) on device.
+
+    Target coords are at 0.69 µm/px; IR source is at 2.0 µm/px (same as third_party/main.py).
+    """
+    scaling_factor = 0.69 / 2.0
+    y0 = int(y0_tgt * scaling_factor)
+    y1 = int(y1_tgt * scaling_factor)
+    x0 = int(x0_tgt * scaling_factor)
+    x1 = int(x1_tgt * scaling_factor)
+    ir_patch_hwc = _read_envi_patch_hwc(data.ir, y0=y0, y1=y1, x0=x0, x1=x1)
+    ir_patch = torch.from_numpy(np.transpose(ir_patch_hwc, (2, 0, 1))).unsqueeze(0)
+    ir_patch = ir_patch.to(device=device, dtype=torch.float32, non_blocking=True).clamp(0.0, 5.0)
+    target_lr = int(tile_size * scaling_factor)
+    pad_rows = max(0, target_lr - ir_patch.shape[2])
+    pad_cols = max(0, target_lr - ir_patch.shape[3])
+    if pad_rows or pad_cols:
+        ir_patch = F.pad(ir_patch, (0, pad_cols, 0, pad_rows), mode="constant", value=0.0)
+    ir_patch = F.interpolate(ir_patch, size=(tile_size, tile_size), mode="bicubic", align_corners=True)
+    return ir_patch
+
+
+def read_vis_tile_to_device(
+    data: FolderData,
+    *,
+    y0_tgt: int,
+    y1_tgt: int,
+    x0_tgt: int,
+    x1_tgt: int,
+    tile_size: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """Read VIS and return (1, 3, tile_size, tile_size) on device in [0, 1]."""
+    if data.vis is None:
+        raise RuntimeError("VIS data required")
+    vis_chw = _read_vis_patch_to_chw(
+        data.vis,
+        y0=int(y0_tgt),
+        y1=int(y1_tgt),
+        x0=int(x0_tgt),
+        x1=int(x1_tgt),
+        expect_channels=3,
+    )
+    v_pad_rows = max(0, tile_size - vis_chw.shape[1])
+    v_pad_cols = max(0, tile_size - vis_chw.shape[2])
+    vis_patch = vis_chw.unsqueeze(0).to(device=device, dtype=torch.float32, non_blocking=True)
+    if v_pad_rows or v_pad_cols:
+        vis_patch = F.pad(vis_patch, (0, v_pad_cols, 0, v_pad_rows), mode="constant", value=0.0)
+    return vis_patch
+
+
+def _output_geometry(
+    data: FolderData,
+    *,
+    mode: str,
+    ir_h: int,
+    ir_w: int,
+) -> tuple[int, int, float, Optional[Tuple[int, int]]]:
+    """Return (r, c, vis_scale, native_vis_hw) for the 0.69 µm output grid.
+
+    Matches `third_party/main.py`: 13ch uses VIS resampled to 0.69 µm/px; IR-only uses IR×(2/0.69).
+    """
+    if mode == "ir_vis":
+        assert data.vis_shape_hwc is not None and data.vis_pixel_size is not None
+        vis_h, vis_w, _ = data.vis_shape_hwc
+        target_ps = 0.69
+        vis_scale = float(data.vis_pixel_size) / target_ps
+        r = max(1, int(vis_h * vis_scale))
+        c = max(1, int(vis_w * vis_scale))
+        native_hw = (int(vis_h), int(vis_w))
+        return r, c, vis_scale, native_hw
+    ratio = 2.0 / 0.69
+    return max(1, int(ir_h * ratio)), max(1, int(ir_w * ratio)), 1.0, None
+
+
+def _fake_to_tile_u8(fake: torch.Tensor, *, dh: int, dw: int) -> np.ndarray:
+    """Convert generator output (BCHW or CHW, [-1,1]) to uint8 HWC sized (dh, dw)."""
+    if not torch.is_tensor(fake):
+        raise TypeError(f"Expected inference tensor output; got {type(fake)}")
+    y_chw = fake[0] if fake.dim() == 4 else fake
+    if y_chw.dim() != 3 or int(y_chw.shape[0]) != 3:
+        raise RuntimeError(f"Expected CHW with 3 channels; got {tuple(y_chw.shape)}")
+    y_np = y_chw.clamp(-1.0, 1.0).detach().float().cpu().numpy()
+    y_np = np.transpose(y_np, (1, 2, 0))  # HWC
+    if y_np.shape[0] != dh or y_np.shape[1] != dw:
+        # Upsample undersized tiles (avoids blank bands when stitch slots are larger than model output).
+        t = torch.from_numpy(np.transpose(y_np, (2, 0, 1))).unsqueeze(0)
+        t = F.interpolate(t, size=(dh, dw), mode="bilinear", align_corners=False)
+        y_np = np.transpose(t.squeeze(0).numpy(), (1, 2, 0))
+    y_np = y_np[:dh, :dw, :]
+    return np.ascontiguousarray(np.clip((y_np * 0.5 + 0.5) * 255.0, 0, 255).astype(np.uint8))
 
 
 def infer_folder(
@@ -283,9 +485,6 @@ def infer_folder(
     tile_size: int,
     device: torch.device,
 ) -> np.ndarray:
-    # Keep the same geometric relation from SwinGAN/Restormer/NAFNet WSI scripts.
-    scaling_factor = 0.69 / 2.0
-
     ir_h, ir_w, ir_c = data.ir_shape_hwc
     ir_idx, n_ir = _select_ir_indices(int(ir_c), num_ir_channels=int(num_ir_channels), ir_channel_indices=str(ir_channel_indices or ""))
 
@@ -302,21 +501,15 @@ def infer_folder(
 
     if mode == "ir_vis":
         if data.vis is None or data.vis_pixel_size is None:
-            raise RuntimeError("13ch mode requires VIS data + pixel size metadata.")
+            raise RuntimeError("IR+VIS mode requires VIS data + pixel size metadata.")
         assert data.vis_shape_hwc is not None
-        vis_h, vis_w, vis_c = data.vis_shape_hwc
-        if int(vis_c) < 3:
+        if int(data.vis_shape_hwc[2]) < 3:
             raise RuntimeError(f"VIS must have >=3 channels; got {data.vis_shape_hwc}")
-
-        # IMPORTANT: VIS source is already at target pixel size in most pipelines;
-        # we avoid full-image resampling here to prevent huge memory spikes.
-        r, c = int(vis_h), int(vis_w)
         vis = data.vis
     else:
-        ratio = 2.0 / 0.69
-        r = int(ir_h * ratio)
-        c = int(ir_w * ratio)
         vis = None
+
+    r, c, vis_scale, native_vis_hw = _output_geometry(data, mode=mode, ir_h=ir_h, ir_w=ir_w)
 
     rn = int(math.ceil(r / tile_size))
     cn = int(math.ceil(c / tile_size))
@@ -331,56 +524,68 @@ def infer_folder(
     with torch.no_grad():
         for ii in range(len(I) - 1):
             for jj in range(len(J) - 1):
-                # IR patch (lower-resolution source), then upsample to model patch size.
-                y0 = int(I[ii] * scaling_factor)
-                y1 = int(I[ii + 1] * scaling_factor)
-                x0 = int(J[jj] * scaling_factor)
-                x1 = int(J[jj + 1] * scaling_factor)
-                ir_patch_hwc = _read_envi_patch_hwc(data.ir, y0=y0, y1=y1, x0=x0, x1=x1)  # (h, w, c)
-                ir_patch_hwc = ir_patch_hwc[:, :, ir_idx]  # select channels
-                # to CHW torch on device
-                ir_patch = torch.from_numpy(np.transpose(ir_patch_hwc, (2, 0, 1))).unsqueeze(0).to(
-                    device=device, dtype=torch.float32, non_blocking=True
+                dh = int(I[ii + 1] - I[ii])
+                dw = int(J[jj + 1] - J[jj])
+                # IR: read at 2 µm/px, bicubic upsample to tile_size (same as third_party/main.py).
+                ir_patch = read_ir_tile_to_device(
+                    data,
+                    y0_tgt=I[ii],
+                    y1_tgt=I[ii + 1],
+                    x0_tgt=J[jj],
+                    x1_tgt=J[jj + 1],
+                    tile_size=tile_size,
+                    device=device,
                 )
-                ir_patch = ir_patch.clamp(0.0, 5.0)
-                target_lr = int(tile_size * scaling_factor)
-                pad_rows = max(0, target_lr - ir_patch.shape[1])
-                pad_cols = max(0, target_lr - ir_patch.shape[2])
-                ir_patch = F.pad(ir_patch, (0, pad_cols, 0, pad_rows), mode="constant", value=0.0)
-                ir_patch = F.interpolate(ir_patch, size=(tile_size, tile_size), mode="bicubic", align_corners=True)
+                ir_patch = ir_patch[:, ir_idx, :, :]
 
                 if mode == "ir_vis":
                     assert vis is not None
-                    vis_chw = _read_vis_patch_to_chw(
-                        vis,
-                        y0=int(I[ii]),
-                        y1=int(I[ii + 1]),
-                        x0=int(J[jj]),
-                        x1=int(J[jj + 1]),
-                        expect_channels=3,
-                    )
-                    v_pad_rows = max(0, tile_size - vis_chw.shape[1])
-                    v_pad_cols = max(0, tile_size - vis_chw.shape[2])
-                    vis_patch = F.pad(
-                        vis_chw.unsqueeze(0).to(device=device, dtype=torch.float32, non_blocking=True),
-                        (0, v_pad_cols, 0, v_pad_rows),
-                        mode="constant",
-                        value=0.0,
-                    )
+                    if abs(vis_scale - 1.0) < 1e-6:
+                        vis_patch = read_vis_tile_to_device(
+                            data,
+                            y0_tgt=I[ii],
+                            y1_tgt=I[ii + 1],
+                            x0_tgt=J[jj],
+                            x1_tgt=J[jj + 1],
+                            tile_size=tile_size,
+                            device=device,
+                        )
+                    else:
+                        vis_chw = _read_vis_patch_to_chw(
+                            vis,
+                            y0=int(I[ii]),
+                            y1=int(I[ii + 1]),
+                            x0=int(J[jj]),
+                            x1=int(J[jj + 1]),
+                            expect_channels=3,
+                            native_hw=native_vis_hw,
+                            vis_scale=vis_scale,
+                        )
+                        v_pad_rows = max(0, tile_size - vis_chw.shape[1])
+                        v_pad_cols = max(0, tile_size - vis_chw.shape[2])
+                        vis_patch = vis_chw.unsqueeze(0).to(
+                            device=device, dtype=torch.float32, non_blocking=True
+                        )
+                        if v_pad_rows or v_pad_cols:
+                            vis_patch = F.pad(
+                                vis_patch,
+                                (0, v_pad_cols, 0, v_pad_rows),
+                                mode="constant",
+                                value=0.0,
+                            )
                     x_patch = torch.cat([ir_patch, vis_patch], dim=1)
                 else:
+                    vis_patch = None
                     x_patch = ir_patch
 
                 fake = model({"input": x_patch, "target": y_dummy}, mode="inference")
-                y_np = fake[0].clamp(-1.0, 1.0).detach().cpu().numpy()
-                y_np = np.transpose(y_np, (1, 2, 0))  # HWC
-                y_u8 = np.clip((y_np * 0.5 + 0.5) * 255.0, 0, 255).astype(np.uint8)
-                out[I[ii]: I[ii + 1], J[jj]: J[jj + 1], :] = y_u8
+                y_u8 = _fake_to_tile_u8(fake, dh=dh, dw=dw)
+                out[I[ii] : I[ii + 1], J[jj] : J[jj + 1], :] = y_u8
 
                 # Keep host memory stable during long WSI runs.
-                del ir_patch_hwc, ir_patch, x_patch, fake, y_np, y_u8
-                if mode == "ir_vis":
-                    del vis_chw, vis_patch
+                del ir_patch, x_patch, fake, y_u8
+                if vis_patch is not None:
+                    del vis_patch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             gc.collect()
@@ -460,8 +665,10 @@ def main() -> None:
 
     for folder_name in folder_names:
         print(f"Processing {folder_name} ...")
-        # model_type: 0=IR-only, 1=IR+VIS (13ch). Infer from input_nc.
-        model_type = 1 if int(args.input_nc) > int(args.num_ir_channels) else 0
+        # model_type: 0=IR-only, 1=IR+VIS. Must use the same n_ir as `infer_folder` (indices vs slice).
+        model_type = _loader_model_type(
+            int(args.input_nc), int(args.num_ir_channels), str(args.ir_channel_indices or "")
+        )
         loader = VSLiteFolderLoader(parent, folder_name, model_type=model_type)
         data = loader.load()
         pred = infer_folder(

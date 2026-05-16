@@ -39,5 +39,5 @@ python "${VSLITE_ROOT}/scripts/infer_wsi_png_baseline.py" \
   --ir_channel_indices "0,8,9" \
   --parent_folder "$WSI_PARENT" \
   --output_dir "$OUT_DIR" \
-  --tile_size "${WSI_TILE_SIZE:-512}"
+  --tile_size "${WSI_TILE_SIZE:-1024}"
 

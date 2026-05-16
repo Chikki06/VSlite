@@ -5,7 +5,9 @@
 #SBATCH --mem=64G
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=71:00:00
+# TEMP: shorter wall time for better queue priority. Revert to ~3 days: replace next line with
+#   #SBATCH --time=71:00:00
+#SBATCH --time=24:00:00
 #SBATCH --chdir=/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN
 #SBATCH --output=/u/akshahi2/logs/%x/%j.out
 #SBATCH --error=/u/akshahi2/logs/%x/%j.err

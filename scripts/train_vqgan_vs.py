@@ -30,7 +30,7 @@ from diffusion_vs.vqgan_vs import (
 from SwinGAN.utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
 from util.atomic_io import atomic_torch_save
 from util.fixed_preview import gather_fixed_preview_batch
-from util.run_logger import RunLogger
+from util.run_logger import DEFAULT_TRAIN_LOG_PRINT_FREQ, RunLogger, should_log_epoch_samples
 from util.sample_grid import save_unified_sample, split_batch_to_list
 from util.save_schedule import make_iter_schedule
 from util.unified_tb import build_unified_writer
@@ -312,6 +312,7 @@ def main() -> None:
     iters_per_epoch = max(1, len(dl))
     total_iters = max(1, int(args.epochs) * iters_per_epoch)
     should_save_image = make_iter_schedule(total_iters, target_saves=int(args.sample_schedule_saves))
+    train_log_freq = int(os.environ.get("VSLITE_TRAIN_LOG_PRINT_FREQ", str(DEFAULT_TRAIN_LOG_PRINT_FREQ)))
 
     @torch.no_grad()
     def _save_unified_preview(epoch_idx: int, step_idx: int) -> None:
@@ -329,8 +330,10 @@ def main() -> None:
             vqgan.train()
 
     for epoch in range(int(start_epoch), int(args.epochs)):
+        epoch_samples = 0
         for batch in dl:
             x = batch.x_he.to(device=device, dtype=torch.float32)
+            bs = int(x.shape[0])
             with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
                 decoded, _z, q_loss = vqgan(x)
 
@@ -350,27 +353,6 @@ def main() -> None:
             g_loss = -torch.mean(disc_fake_for_g)
             lam = vqgan.calculate_lambda(perceptual_rec, g_loss)
             vq_loss = perceptual_rec + q_loss + disc_factor * lam * g_loss
-
-            if global_step % 100 == 0:
-                decoded_det = decoded.detach()
-                active_codes = torch.unique(_z.detach()).numel()
-                run_logger.append_loss(
-                    epoch + 1,
-                    global_step,
-                    {
-                        "rec_l1": float(rec_l1.detach().item()),
-                        "lpips": float(lp.detach().item()),
-                        "q_loss": float(q_loss.detach().item()),
-                        "g_loss": float(g_loss.detach().item()),
-                        "d_loss": float(gan_loss.detach().item()) if "gan_loss" in locals() else 0.0,
-                        "lambda": float(lam.detach().item()),
-                        "disc_factor": float(disc_factor),
-                        "decoded_mean": float(decoded_det.mean().item()),
-                        "decoded_std": float(decoded_det.std().item()),
-                        "active_codes_batch": float(active_codes),
-                    },
-                    lr=float(args.learning_rate),
-                )
 
             if global_step % accum == 0:
                 opt_vq.zero_grad(set_to_none=True)
@@ -397,6 +379,28 @@ def main() -> None:
                 scaler.update()
 
             global_step += 1
+            epoch_samples += bs
+
+            if should_log_epoch_samples(epoch_samples, bs, train_log_freq):
+                decoded_det = decoded.detach()
+                active_codes = torch.unique(_z.detach()).numel()
+                run_logger.append_loss(
+                    epoch + 1,
+                    epoch_samples,
+                    {
+                        "rec_l1": float(rec_l1.detach().item()),
+                        "lpips": float(lp.detach().item()),
+                        "q_loss": float(q_loss.detach().item()),
+                        "g_loss": float(g_loss.detach().item()),
+                        "d_loss": float(gan_loss.detach().item()),
+                        "lambda": float(lam.detach().item()),
+                        "disc_factor": float(disc_factor),
+                        "decoded_mean": float(decoded_det.mean().item()),
+                        "decoded_std": float(decoded_det.std().item()),
+                        "active_codes_batch": float(active_codes),
+                    },
+                    lr=float(args.learning_rate),
+                )
 
             if should_save_image(global_step - 1):
                 _save_unified_preview(epoch, global_step)
