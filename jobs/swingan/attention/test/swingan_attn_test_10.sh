@@ -20,18 +20,20 @@ export SWINGAN_INPUT_MODE="ir10"
 
 VSLITE_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 SWINGAN_RUN_TAG="a10"
-SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan_i2i/${SWINGAN_RUN_TAG}}"
-CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_attention.yaml"
+SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan/${SWINGAN_RUN_TAG}}"
+CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_attention.yaml"
 
 CKPT_PATH="${SWINGAN_CKPT_PATH:-${SWINGAN_OUTPUT_DIR}/ckpt_latest.pth}"
 SWINGAN_TEST_SPLIT="test"
 NUM_TEST="${NUM_TEST:-75000}"
 WSI_PARENT="${VSLITE_DIR}/input/IR"
-TEST_ROOT="${VSLITE_DIR}/results/swingan_i2i/test/${SWINGAN_RUN_TAG}"
+TEST_ROOT="${VSLITE_DIR}/results/swingan/test/${SWINGAN_RUN_TAG}"
 PATCH_OUT_DIR="${TEST_ROOT}/patch_eval_test"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 
 mkdir -p "$PRED_WSI_DIR"
+
+export WSI_BATCH_SIZE="${WSI_BATCH_SIZE:-4}"
 
 SKIP_WSI="${SKIP_WSI:-1}"
 if [[ "$SKIP_WSI" != "1" ]]; then
@@ -40,7 +42,8 @@ if [[ "$SKIP_WSI" != "1" ]]; then
     --config "$CONFIG_PATH" \
     --model 1 \
     --parent_folder "$WSI_PARENT" \
-    --output_dir "$PRED_WSI_DIR"
+    --output_dir "$PRED_WSI_DIR" \
+    --tile_size "${WSI_TILE_SIZE:-512}"
 
   python "${VSLITE_DIR}/util/wsi_tile_metrics.py" \
     --pred_wsi_dir "$PRED_WSI_DIR" \

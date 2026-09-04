@@ -119,6 +119,8 @@ class MetricsResult:
     ssim_mean: float | None
     ssim_std: float | None
     fid: float | None
+    lpips_convnext_tcga_mean: float | None = None
+    lpips_convnext_tcga_std: float | None = None
 
 
 @dataclass
@@ -147,6 +149,30 @@ class _ActStats:
         mu = self.sum / float(self.n)
         cov = (self.sum_outer - float(self.n) * np.outer(mu, mu)) / float(self.n - 1)
         return mu, cov
+
+
+@dataclass
+class _Welford:
+    """Online mean / population-std (ddof=0, matches ``np.std``) without storing values."""
+
+    n: int = 0
+    mean: float = 0.0
+    m2: float = 0.0
+
+    def update(self, xs: np.ndarray | list[float] | float) -> None:
+        arr = np.asarray(xs, dtype=np.float64).ravel()
+        for x in arr:
+            self.n += 1
+            delta = float(x) - self.mean
+            self.mean += delta / float(self.n)
+            self.m2 += delta * (float(x) - self.mean)
+
+    def mean_std(self) -> tuple[float | None, float | None]:
+        if self.n <= 0:
+            return None, None
+        if self.n == 1:
+            return float(self.mean), 0.0
+        return float(self.mean), float(np.sqrt(self.m2 / float(self.n)))
 
 
 def _list_images(d: str) -> list[str]:
@@ -236,16 +262,21 @@ def compute_metrics_streaming(
     fid_batch_size: int = 16,
     compute_fid: bool = True,
     compute_ssim: bool = True,
+    compute_lpips: bool = True,
 ) -> MetricsResult:
     """
     Streaming metrics for large patch sets without writing PNGs for every patch.
 
     pairs yields (target, pred) tensors as CHW in either [-1,1] or [0,1].
+    PSNR/SSIM and lpips_convnext_tcga run on all pairs; FID may be capped.
     """
+    from util.lpips_convnext import build_lpips_convnext_tcga
+
     dev = torch.device(device if (device == "cpu" or torch.cuda.is_available()) else "cpu")
 
     psnrs: list[float] = []
     ssims: list[float] = []
+    lpips_stats = _Welford()
 
     # FID accumulators
     fid_val: float | None = None
@@ -256,9 +287,27 @@ def compute_metrics_streaming(
     buf_t: list[torch.Tensor] = []
     buf_p: list[torch.Tensor] = []
 
+    lpips_mod = None
+    lpips_buf_t: list[torch.Tensor] = []
+    lpips_buf_p: list[torch.Tensor] = []
+    lpips_bs = max(1, int(fid_batch_size))
+
     if compute_fid:
         model = _ConvNeXtTinyFID().to(dev)
         model.eval()
+    if compute_lpips:
+        lpips_mod = build_lpips_convnext_tcga(device=dev)
+
+    def _flush_lpips() -> None:
+        if lpips_mod is None or not lpips_buf_t:
+            return
+        bt = torch.stack(lpips_buf_t, dim=0).to(dev, dtype=torch.float32)
+        bp = torch.stack(lpips_buf_p, dim=0).to(dev, dtype=torch.float32)
+        # LPIPS module expects [-1, 1]; buffers are stored in [0, 1].
+        d = lpips_mod(bp * 2.0 - 1.0, bt * 2.0 - 1.0)
+        lpips_stats.update(d.detach().cpu().numpy())
+        lpips_buf_t.clear()
+        lpips_buf_p.clear()
 
     n = 0
     fid_pairs_seen = 0
@@ -272,6 +321,13 @@ def compute_metrics_streaming(
         psnrs.append(_psnr_01(gt, pr))
         if compute_ssim:
             ssims.append(_ssim_01(gt, pr))
+
+        # lpips_convnext_tcga on every PSNR/SSIM pair (not the FID cap).
+        if compute_lpips and lpips_mod is not None:
+            lpips_buf_t.append(gt01[0])
+            lpips_buf_p.append(pr01[0])
+            if len(lpips_buf_t) >= lpips_bs:
+                _flush_lpips()
 
         # FID can be capped independently of PSNR/SSIM.
         # If fid_max_items is set, we still compute PSNR/SSIM on all pairs,
@@ -296,6 +352,8 @@ def compute_metrics_streaming(
                 buf_p.clear()
 
         n += 1
+
+    _flush_lpips()
 
     # Flush remainder
     if (
@@ -330,6 +388,7 @@ def compute_metrics_streaming(
         except Exception:
             fid_val = None
 
+    lp_mean, lp_std = lpips_stats.mean_std()
     return MetricsResult(
         n=int(n),
         psnr_mean=float(np.mean(psnrs)) if psnrs else None,
@@ -337,6 +396,8 @@ def compute_metrics_streaming(
         ssim_mean=float(np.mean(ssims)) if ssims else None,
         ssim_std=float(np.std(ssims)) if ssims else None,
         fid=fid_val,
+        lpips_convnext_tcga_mean=lp_mean,
+        lpips_convnext_tcga_std=lp_std,
     )
 
 
@@ -388,9 +449,37 @@ def compute_metrics_from_dirs(
     fid_max_items: int | None = None,
     fid_batch_size: int = 16,
 ) -> MetricsResult:
+    from util.lpips_convnext import build_lpips_convnext_tcga
+
     pairs = _match_pairs(target_dir, pred_dir)
     if not pairs:
-        return MetricsResult(n=0, psnr_mean=None, psnr_std=None, ssim_mean=None, ssim_std=None, fid=None)
+        return MetricsResult(
+            n=0,
+            psnr_mean=None,
+            psnr_std=None,
+            ssim_mean=None,
+            ssim_std=None,
+            fid=None,
+            lpips_convnext_tcga_mean=None,
+            lpips_convnext_tcga_std=None,
+        )
+
+    dev = torch.device(device if (device == "cpu" or torch.cuda.is_available()) else "cpu")
+    lpips_mod = build_lpips_convnext_tcga(device=dev)
+    lpips_stats = _Welford()
+    lpips_bs = max(1, int(fid_batch_size))
+    lp_buf_t: list[torch.Tensor] = []
+    lp_buf_p: list[torch.Tensor] = []
+
+    def _flush_lpips() -> None:
+        if not lp_buf_t:
+            return
+        bt = torch.stack(lp_buf_t, dim=0).to(dev, dtype=torch.float32)
+        bp = torch.stack(lp_buf_p, dim=0).to(dev, dtype=torch.float32)
+        d = lpips_mod(bp * 2.0 - 1.0, bt * 2.0 - 1.0)
+        lpips_stats.update(d.detach().cpu().numpy())
+        lp_buf_t.clear()
+        lp_buf_p.clear()
 
     psnrs: list[float] = []
     ssims: list[float] = []
@@ -399,13 +488,19 @@ def compute_metrics_from_dirs(
         pr = _read_rgb_01(p_path)
         psnrs.append(_psnr_01(gt, pr))
         ssims.append(_ssim_01(gt, pr))
+        gt_t = torch.from_numpy(gt).permute(2, 0, 1)
+        pr_t = torch.from_numpy(pr).permute(2, 0, 1)
+        lp_buf_t.append(gt_t)
+        lp_buf_p.append(pr_t)
+        if len(lp_buf_t) >= lpips_bs:
+            _flush_lpips()
+    _flush_lpips()
 
     # FID uses distributions; it does not require per-image alignment, but we keep the same paired subset.
     fid_val: float | None = None
     try:
         n_fid = len(pairs) if fid_max_items is None else min(len(pairs), int(fid_max_items))
         if n_fid >= 2:
-            dev = torch.device(device if (device == "cpu" or torch.cuda.is_available()) else "cpu")
             t_paths = [tp for _k, tp, _pp in pairs[:n_fid]]
             p_paths = [pp for _k, _tp, pp in pairs[:n_fid]]
             mu1, s1 = _accumulate_inception_stats(paths=t_paths, device=dev, batch_size=fid_batch_size)
@@ -414,6 +509,7 @@ def compute_metrics_from_dirs(
     except Exception:
         fid_val = None
 
+    lp_mean, lp_std = lpips_stats.mean_std()
     return MetricsResult(
         n=len(pairs),
         psnr_mean=float(np.mean(psnrs)),
@@ -421,5 +517,7 @@ def compute_metrics_from_dirs(
         ssim_mean=float(np.mean(ssims)),
         ssim_std=float(np.std(ssims)),
         fid=fid_val,
+        lpips_convnext_tcga_mean=lp_mean,
+        lpips_convnext_tcga_std=lp_std,
     )
 

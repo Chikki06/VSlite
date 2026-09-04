@@ -1,9 +1,10 @@
 """
-Wrapper location for baseline contrastive pix2pix training.
+CISLNet (contrastive pix2pix) training for VSlite.
 
-This file contains the original repo-root `train.py` implementation, moved under `scripts/`.
+Formerly called baseline; unified framework hooks for TB, preview, early stopping.
 """
 
+import math
 import os
 import sys
 from pathlib import Path
@@ -11,97 +12,121 @@ from pathlib import Path
 import numpy as np
 import torch
 
-# Ensure repo-root modules (e.g. `data/`) are importable even when invoked as
-# `python scripts/train.py` (which otherwise prepends `scripts/` to sys.path).
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 import data
-import evaluation.group_evaluator as group_evaluator
 import util.util as util
 from options.train_options import TrainOptions
 from trainers import get_trainer
-from util.fixed_preview import gather_fixed_preview_batch
-from util.iter_counter import IterationCounter
 from util.batch_device import move_to_device
-from util.sample_grid import save_unified_sample, split_batch_to_list
+from util.iter_counter import IterationCounter
 from util.save_schedule import make_iter_schedule
-from util.unified_tb import build_unified_writer
+from util.tb_logger import UnifiedTBLogger
+from util.preview_manager import PreviewManager
+from util.early_stopping import EarlyStopping
 from util.visualizer import Visualizer
 from util.eval_caps import eval_max_batches_train, eval_max_batches_val, eval_max_batches_test
 from util.run_logger import should_log_epoch_samples
+from util.lpips_convnext import build_lpips_convnext_tcga
+from cislnet.train_interface import VSliteTrainConfig, validate_train_config
 
 os.environ["WANDB_MODE"] = "dryrun"
 
 opt = TrainOptions().parse()
 print(" ".join(sys.argv))
 
-dataloader = data.create_dataloader(opt)
-test_dataloader = data.create_dataloader(util.copyconf(opt, phase="test", batch_size=1))
-val_dataloader = data.create_dataloader(util.copyconf(opt, phase="val", batch_size=1))
-train_eval_dataloader = data.create_dataloader(
-    util.copyconf(opt, phase="train", serial_batches=True, isTrain=False, batch_size=1)
+# Resolve total epochs
+if getattr(opt, "total_epochs", 0) and int(opt.total_epochs) > 0:
+    te = int(opt.total_epochs)
+    opt.niter = te
+    opt.niter_decay = 0
+
+num_channels = int(getattr(opt, "input_nc", 13))
+patch_size = int(getattr(opt, "image_size", 1024))
+vcfg = VSliteTrainConfig(
+    model="cislnet",
+    run=str(opt.name),
+    num_channels=num_channels,
+    patch_size=patch_size,
+    batch_size=int(opt.batch_size),
+    epochs=int(opt.niter) + int(opt.niter_decay),
+    lr=float(opt.lr),
+    weight_decay=float(getattr(opt, "weight_decay", 0.0)),
+    he_color_space=str(getattr(opt, "he_color_space", "srgb")),
+    augment=not bool(getattr(opt, "no_aug", False)),
+    early_stop_patience=int(getattr(opt, "early_stop_patience", 0) or 0),
+    early_stop_min_delta=float(getattr(opt, "early_stop_min_delta", 1e-4)),
+    output_dir=os.path.join(opt.checkpoints_dir, opt.name),
 )
+validate_train_config(vcfg)
+
+dataloader = data.create_dataloader(opt)
+_eval_kw = dict(serial_batches=True, isTrain=False, batch_size=1)
+test_dataloader = data.create_dataloader(util.copyconf(opt, phase="test", **_eval_kw))
+val_dataloader = data.create_dataloader(util.copyconf(opt, phase="val", **_eval_kw))
+train_eval_dataloader = data.create_dataloader(
+    util.copyconf(opt, phase="train", **_eval_kw)
+)
+
+
+def _dataset_len(loader) -> int:
+    try:
+        return int(len(loader.dataset))
+    except Exception:
+        return 0
 
 trainer = get_trainer(opt)
 iter_counter = IterationCounter(opt, len(dataloader.dataset))
 visualizer = Visualizer(opt)
-evaluator = group_evaluator.GroupEvaluator(opt)
-u_writer, _u_tb = build_unified_writer(model="baseline_contrastive_pix2pix", run=str(opt.name))
+tb = UnifiedTBLogger("cislnet", str(opt.name), run_dir=vcfg.output_dir)
+tb.log_meta(vcfg, epoch=0)
 
 samples_dir = os.path.join(opt.checkpoints_dir, opt.name, "samples")
 os.makedirs(samples_dir, exist_ok=True)
 
-# Total work is measured in "samples processed" (matches IterationCounter.total_steps_so_far)
-# NOTE: `IterationCounter.total_steps_so_far` increments by `opt.batch_size` per dataloader
-# iteration, so the natural unit is "samples processed", not "batches".
-# Use the *actual* number of samples processed per epoch (len(dataloader) * batch_size),
-# which also respects drop_last behavior in the dataloader.
 steps_per_epoch = int(len(dataloader)) * int(opt.batch_size)
 total_steps_expected = int(iter_counter.total_epochs) * steps_per_epoch
 should_save_image = make_iter_schedule(total_steps_expected, target_saves=50)
 
-# Capture 8 deterministic preview samples once so successive PNGs are
-# directly comparable across the run.
-fixed_preview = gather_fixed_preview_batch(train_eval_dataloader, n=8)
 
-
-@torch.no_grad()
-def _eval_l1(trainer, loader, max_batches: int = 0) -> float:
-    """
-    Evaluate mean L1(|G(x)-y|) over a dataloader.
-    max_batches=0 means full loader; otherwise limits to first N batches.
-    """
-    trainer.model.eval()
+def _trainer_device(trainer) -> torch.device:
     try:
-        device = next(trainer.model.parameters()).device
+        return next(trainer.model.parameters()).device
     except StopIteration:
-        device = torch.device("cpu")
-    tot = 0.0
-    n = 0
-    for bi, batch in enumerate(loader):
-        if max_batches and bi >= int(max_batches):
-            break
-        batch = move_to_device(batch, device)
-        fake = trainer.model(batch, mode="inference")
-        if not torch.is_tensor(fake):
-            raise TypeError(f"Expected inference output to be a Tensor, got {type(fake)}")
-        y = batch["target"]
-        if not torch.is_tensor(y):
-            raise TypeError(f"Expected batch['target'] to be a Tensor, got {type(y)}")
-        l1 = torch.mean(torch.abs(fake - y)).item()
-        bs = int(y.shape[0]) if hasattr(y, "shape") else 1
-        tot += float(l1) * bs
-        n += bs
-    trainer.model.train()
-    return tot / max(1, n)
+        return torch.device("cpu")
 
 
 @torch.no_grad()
-def _save_unified_preview(trainer, fixed_batch, epoch: int, step: int) -> None:
-    if fixed_batch is None:
-        return
+def _eval_l1_lpips(trainer, loader, lpips_mod, max_batches: int = 0) -> tuple[float, float]:
+    """Capped diagnostic: mean L1 and lpips_convnext_tcga. Inference only, no grad."""
+    trainer.model.eval()
+    lpips_mod.eval()
+    device = _trainer_device(trainer)
+    tot_l1 = 0.0
+    tot_lp = 0.0
+    n = 0
+    try:
+        for bi, batch in enumerate(loader):
+            if max_batches and bi >= int(max_batches):
+                break
+            batch = move_to_device(batch, device)
+            fake = trainer.model(batch, mode="inference")
+            y = batch["target"]
+            l1 = torch.mean(torch.abs(fake - y)).item()
+            lp = lpips_mod(fake, y)
+            bs = int(y.shape[0]) if hasattr(y, "shape") else 1
+            tot_l1 += float(l1) * bs
+            tot_lp += float(lp.sum().item()) if lp.ndim > 0 else float(lp.item()) * bs
+            n += bs
+    finally:
+        trainer.model.train()
+    denom = max(1, n)
+    return tot_l1 / denom, tot_lp / denom
+
+
+def _preview_forward(fixed_batch):
     trainer.model.eval()
     try:
         device = next(trainer.model.parameters()).device
@@ -109,12 +134,66 @@ def _save_unified_preview(trainer, fixed_batch, epoch: int, step: int) -> None:
         device = torch.device("cpu")
     fixed_batch = move_to_device(fixed_batch, device)
     fake = trainer.model(fixed_batch, mode="inference")
-    target = fixed_batch["target"]
-    reals = split_batch_to_list(target.detach().cpu())[:8]
-    preds = split_batch_to_list(fake.detach().cpu())[:8]
-    name = f"epoch{int(epoch):03d}_step{int(step):09d}"
-    save_unified_sample(samples_dir, name, reals, preds)
     trainer.model.train()
+    return fixed_batch["target"], fake
+
+
+# Frozen split has no val set (val.txt is empty; those samples are in test).
+# Preview on held-out test tiles when val is empty so we still lock 8 patches.
+_preview_loader = val_dataloader if _dataset_len(val_dataloader) > 0 else test_dataloader
+preview = PreviewManager(
+    preview_loader=_preview_loader,
+    out_dir=samples_dir,
+    tb=tb,
+    should_save=should_save_image,
+    forward_fn=_preview_forward,
+    preview_tile_list=os.environ.get("PREVIEW_TILE_LIST"),
+)
+
+early = EarlyStopping(
+    patience=int(vcfg.early_stop_patience),
+    min_delta=float(vcfg.early_stop_min_delta),
+)
+
+# Frozen ConvNeXt-TCGA Zhang-lin0 metric. Eval-only; not a training loss.
+lpips_mod = build_lpips_convnext_tcga(
+    ckpt_path=getattr(opt, "tcga_feature_ckpt", None),
+    device=_trainer_device(trainer),
+)
+
+
+def _parse_save_epochs(raw) -> set[int] | None:
+    s = str(raw or "").strip()
+    if not s:
+        return None
+    out: set[int] = set()
+    for part in s.replace(":", ",").split(","):
+        p = part.strip()
+        if p:
+            out.add(int(p))
+    return out or None
+
+
+def _should_save_epoch_ckpt(epoch: int, total_epochs: int, save_at: set[int] | None, freq: int) -> bool:
+    if epoch == total_epochs:
+        return True
+    if save_at is not None:
+        return epoch in save_at
+    freq = max(1, int(freq))
+    return epoch % freq == 0
+
+
+save_at_epochs = _parse_save_epochs(getattr(opt, "save_epochs", ""))
+
+
+def _save_best_ckpt():
+    import shutil
+
+    trainer.save("latest")
+    src = os.path.join(opt.checkpoints_dir, opt.name, "latest_net_G.pth")
+    dst = os.path.join(opt.checkpoints_dir, opt.name, "best_net_G.pth")
+    if os.path.isfile(src):
+        shutil.copy2(src, dst)
 
 
 for epoch in iter_counter.training_epochs():
@@ -138,30 +217,22 @@ for epoch in iter_counter.training_epochs():
                 trainer.old_lr,
             )
             visualizer.plot_current_errors(losses, iter_counter.total_steps_so_far)
+            tb.log_train_scalars(
+                {k: float(v.mean().item()) if hasattr(v, "mean") else float(v) for k, v in losses.items()},
+                int(iter_counter.total_steps_so_far),
+            )
 
         step = int(iter_counter.total_steps_so_far)
-        # `make_iter_schedule` expects a 0-based index; `total_steps_so_far` starts at 0
-        # and then jumps by `batch_size`, so the right aligned index is `(step - 1)`.
-        # Also guard against any mismatch where `step` exceeds the expected total
-        # (which would otherwise make the schedule fire continuously near the end).
         if step <= total_steps_expected and should_save_image(step - 1):
-            _save_unified_preview(trainer, fixed_preview, epoch, step)
+            preview.maybe_save(epoch, step)
             if getattr(opt, "debug", False):
                 debug_dir = Path(opt.checkpoints_dir) / opt.name / "debug_npys"
                 debug_dir.mkdir(parents=True, exist_ok=True)
-                np.save(
-                    str(debug_dir / f"target_{step}.npy"),
-                    data_i["target"].data.cpu().numpy(),
-                )
-                np.save(
-                    str(debug_dir / f"input_{step}.npy"),
-                    data_i["input"].data.cpu().numpy(),
-                )
+                np.save(str(debug_dir / f"target_{step}.npy"), data_i["target"].data.cpu().numpy())
+                np.save(str(debug_dir / f"input_{step}.npy"), data_i["input"].data.cpu().numpy())
 
         if iter_counter.needs_saving():
-            print(
-                f"saving the latest model (epoch {epoch}, total_steps {iter_counter.total_steps_so_far})"
-            )
+            print(f"saving the latest model (epoch {epoch}, total_steps {iter_counter.total_steps_so_far})")
             trainer.save("latest")
             iter_counter.record_current_iter()
 
@@ -171,21 +242,53 @@ for epoch in iter_counter.training_epochs():
     eval_train_batches = int(eval_max_batches_train())
     eval_val_batches = int(eval_max_batches_val())
     eval_test_batches = int(eval_max_batches_test())
-    train_l1 = _eval_l1(trainer, train_eval_dataloader, max_batches=eval_train_batches)
-    val_l1 = _eval_l1(trainer, val_dataloader, max_batches=eval_val_batches)
-    test_l1 = _eval_l1(trainer, test_dataloader, max_batches=eval_test_batches)
-    u_writer.add_scalar("l1/train", float(train_l1), epoch)
-    u_writer.add_scalar("l1/val", float(val_l1), epoch)
-    u_writer.add_scalar("l1/test", float(test_l1), epoch)
+    train_l1, train_lpips = _eval_l1_lpips(
+        trainer, train_eval_dataloader, lpips_mod, max_batches=eval_train_batches
+    )
+    if _dataset_len(val_dataloader) > 0:
+        val_l1, val_lpips = _eval_l1_lpips(
+            trainer, val_dataloader, lpips_mod, max_batches=eval_val_batches
+        )
+    else:
+        val_l1, val_lpips = float("nan"), float("nan")
+    test_l1, test_lpips = _eval_l1_lpips(
+        trainer, test_dataloader, lpips_mod, max_batches=eval_test_batches
+    )
+    tb_step = int(iter_counter.total_steps_so_far)
+    tb.log_epoch_l1(train_l1, val_l1, test_l1, tb_step)
+    tb.log_epoch_lpips(train_lpips, val_lpips, test_lpips, tb_step)
 
-    # End-of-epoch composite save (always, even if the iter schedule didn't fire).
-    _save_unified_preview(trainer, fixed_preview, epoch, iter_counter.total_steps_so_far)
+    def _fmt_m(v: float) -> str:
+        return f"{v:.6f}" if math.isfinite(v) else "n/a"
 
-    if epoch % opt.save_epoch_freq == 0 or epoch == iter_counter.total_epochs:
+    print(
+        f"End of epoch {epoch} / {iter_counter.total_epochs} "
+        f"\t samples {tb_step} "
+        f"\t train_l1: {_fmt_m(train_l1)} \t val_l1: {_fmt_m(val_l1)} \t test_l1: {_fmt_m(test_l1)} "
+        f"\t train_lpips_convnext_tcga: {_fmt_m(train_lpips)} "
+        f"\t val_lpips_convnext_tcga: {_fmt_m(val_lpips)} "
+        f"\t test_lpips_convnext_tcga: {_fmt_m(test_lpips)}"
+    )
+
+    preview.save_epoch_end(epoch, iter_counter.total_steps_so_far)
+
+    if math.isfinite(val_l1) and vcfg.early_stop_patience > 0:
+        if early.step(val_l1, epoch):
+            _save_best_ckpt()
+
+    if early.should_stop():
+        tb.log_early_stop(early.state.best_value, epoch)
+        print(f"Early stopping at epoch {epoch} (best val L1 {early.state.best_value:.6f})")
+        break
+
+    if _should_save_epoch_ckpt(
+        epoch, int(iter_counter.total_epochs), save_at_epochs, int(opt.save_epoch_freq)
+    ):
         print(
-            f"saving the model at the end of epoch {epoch}, iters {iter_counter.total_steps_so_far}"
+            f"saving the model at the end of epoch {epoch} "
+            f"(samples {iter_counter.total_steps_so_far})"
         )
         trainer.save(f"{epoch}")
 
 print("Training was successfully finished.")
-u_writer.close()
+tb.close()

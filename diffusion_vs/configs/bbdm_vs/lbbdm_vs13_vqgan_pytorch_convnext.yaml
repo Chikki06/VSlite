@@ -53,7 +53,7 @@ model:
   VQGAN:
     params:
       vqgan_impl: 'vqgan_pytorch'
-      vqgan_pytorch_ckpt: '/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs/vqgan_he/checkpoints/vqgan_epoch_049.pt'
+      vqgan_pytorch_ckpt: '/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan/vqgan_he/checkpoints/vqgan_epoch_049.pt'
 
   BB:
     optimizer:

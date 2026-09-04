@@ -23,7 +23,7 @@ export VSLITE_INFER_BS="${VSLITE_INFER_BS:-16}"
 VSLITE_ROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 TEST_SCRIPT="${VSLITE_ROOT}/Restormer/test_i2i_restormer.py"
 DATAROOT="${VSLITE_ROOT}/dataset/data_frozen"
-CONFIG_FILE="${VSLITE_ROOT}/Restormer/config_i2i_restormer_perceptual_img256.yaml"
+CONFIG_FILE="${VSLITE_ROOT}/Restormer/config_restormer_perceptual_img256.yaml"
 
 export RESTORMER_OUTPUT_DIR="${VSLITE_ROOT}/results_old/restormer_i2i/a13"
 export RESTORMER_DATAROOT="${DATAROOT}"
@@ -32,12 +32,14 @@ export RESTORMER_INPUT_MODE="irvis13"
 CKPT_PATH="${RESTORMER_CKPT_PATH:-${RESTORMER_OUTPUT_DIR}/ckpt_latest.pth}"
 
 WSI_PARENT="${VSLITE_ROOT}/input/IR"
-TEST_ROOT="${VSLITE_ROOT}/results/restormer_i2i/test/a13_legacy256"
+TEST_ROOT="${VSLITE_ROOT}/results/restormer/test/a13_legacy256"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 NUM_TEST="${NUM_TEST:-75000}"
 FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-$NUM_TEST}"
 
 mkdir -p "$PRED_WSI_DIR"
+
+export WSI_BATCH_SIZE="${WSI_BATCH_SIZE:-16}"
 
 SKIP_WSI="${SKIP_WSI:-1}"
 if [[ "$SKIP_WSI" != "1" ]]; then
@@ -46,7 +48,8 @@ if [[ "$SKIP_WSI" != "1" ]]; then
     --config "$CONFIG_FILE" \
     --model 1 \
     --parent_folder "$WSI_PARENT" \
-    --output_dir "$PRED_WSI_DIR"
+    --output_dir "$PRED_WSI_DIR" \
+    --tile_size "${WSI_TILE_SIZE:-256}"
 
   python "${VSLITE_ROOT}/util/wsi_tile_metrics.py" \
     --pred_wsi_dir "$PRED_WSI_DIR" \

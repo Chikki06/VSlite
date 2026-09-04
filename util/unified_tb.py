@@ -63,6 +63,13 @@ def build_unified_writer(model: str, run: str):
     """
     from torch.utils.tensorboard import SummaryWriter
 
+    try:
+        from cislnet.registry import canonical_model_tag
+
+        model = canonical_model_tag(model)
+    except ImportError:
+        pass
+
     u = resolve_unified_tb(model=model, run=run)
     u.log_dir.mkdir(parents=True, exist_ok=True)
     return SummaryWriter(log_dir=str(u.log_dir)), u

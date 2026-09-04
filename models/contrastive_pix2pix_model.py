@@ -134,7 +134,7 @@ class ContrastivePix2PixModel(torch.nn.Module):
 
             self.criterionFeat = torch.nn.L1Loss()
 
-            if not opt.no_vgg_loss:
+            if not getattr(opt, 'no_convnext_loss', getattr(opt, 'no_vgg_loss', True)):
                 self.criterionVGG = networks.PerceptualLoss(self.opt)
 
             if opt.use_vae:
@@ -218,18 +218,20 @@ class ContrastivePix2PixModel(torch.nn.Module):
 
         if opt.optimizer.lower() != 'adam':
             raise ValueError('Optimizer {} not recognized'.format(opt.optimizer))
+        wd = float(getattr(opt, 'weight_decay', 0.0))
+        opt_cls = torch.optim.AdamW if str(getattr(opt, 'optimizer', 'adam')).lower() == 'adamw' else torch.optim.Adam
         optimizer_G = (
-            torch.optim.Adam(G_params, lr=G_lr, betas=(beta1, beta2))
+            opt_cls(G_params, lr=G_lr, betas=(beta1, beta2), weight_decay=wd)
             if G_params
             else None
         )
         optimizer_F = (
-            torch.optim.Adam(F_params, lr=G_lr, betas=(beta1, beta2))
+            opt_cls(F_params, lr=G_lr, betas=(beta1, beta2), weight_decay=wd)
             if F_params
             else None
         )
         optimizer_D = (
-            torch.optim.Adam(D_params, lr=D_lr, betas=(beta1, beta2))
+            opt_cls(D_params, lr=D_lr, betas=(beta1, beta2), weight_decay=wd)
             if D_params
             else None
         )
@@ -382,9 +384,10 @@ class ContrastivePix2PixModel(torch.nn.Module):
                     GAN_Feat_loss += unweighted_loss * self.opt.lambda_ganFeat / num_D
             G_losses['GAN_Feat'] = GAN_Feat_loss
 
-        if not self.opt.no_vgg_loss:
-            G_losses['VGG'] = (
-                self.criterionVGG(fake_image, real_image) * self.opt.lambda_vgg
+        if not getattr(self.opt, 'no_convnext_loss', getattr(self.opt, 'no_vgg_loss', True)):
+            G_losses['ConvNeXt'] = (
+                self.criterionVGG(fake_image, real_image)
+                * getattr(self.opt, 'lambda_convnext', getattr(self.opt, 'lambda_vgg', 1.0))
             )
 
         if not self.opt.no_contrastive_loss:

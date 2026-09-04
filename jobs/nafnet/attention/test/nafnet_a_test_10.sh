@@ -17,13 +17,13 @@ conda activate torchenv
 
 source /u/akshahi2/jobs/nafnet/nafnet_inc.sh
 
-export NAFNET_OUTPUT_DIR="${VSLITE_DIR}/results/nafnet_i2i/a10"
+export NAFNET_OUTPUT_DIR="${VSLITE_DIR}/results/nafnet/a10"
 export NAFNET_INPUT_MODE="ir10"
-CONFIG_FILE="${NAFNET_DIR}/config_i2i_nafnet_attention.yaml"
+CONFIG_FILE="${NAFNET_DIR}/config_nafnet_attention.yaml"
 
 CKPT_PATH="${NAFNET_CKPT_PATH:-${NAFNET_OUTPUT_DIR}/ckpt_latest.pth}"
 WSI_PARENT="${VSLITE_DIR}/input/IR"
-TEST_ROOT="${VSLITE_DIR}/results/nafnet_i2i/test/a10"
+TEST_ROOT="${VSLITE_DIR}/results/nafnet/test/a10"
 PATCH_OUT_DIR="${TEST_ROOT}/patch_eval_test"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 NUM_TEST="${NUM_TEST:-75000}"
@@ -49,7 +49,7 @@ else
 fi
 
 python test_i2i_nafnet.py \
-  --config "${NAFNET_DIR}/config_i2i_nafnet_attention.yaml" \
+  --config "${NAFNET_DIR}/config_nafnet_attention.yaml" \
   --ckpt "$CKPT_PATH" \
   --split "test" \
   --num_samples 20 \
@@ -60,7 +60,7 @@ python test_i2i_nafnet.py \
   --out_dir "$PATCH_OUT_DIR"
 
 python test_i2i_nafnet.py \
-  --config "${NAFNET_DIR}/config_i2i_nafnet_attention.yaml" \
+  --config "${NAFNET_DIR}/config_nafnet_attention.yaml" \
   --ckpt "$CKPT_PATH" \
   --split "train" \
   --num_samples 20 \

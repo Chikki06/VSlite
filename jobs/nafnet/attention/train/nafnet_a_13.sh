@@ -19,8 +19,8 @@ source /u/akshahi2/jobs/nafnet/nafnet_inc.sh
 
 export NAFNET_GPU_ID="0"
 export NAFNET_INPUT_MODE="irvis13"
-export NAFNET_OUTPUT_DIR="${VSLITE_DIR}/results/nafnet_i2i/a13"
-CONFIG_PATH="${NAFNET_DIR}/config_i2i_nafnet_attention.yaml"
+export NAFNET_OUTPUT_DIR="${VSLITE_DIR}/results/nafnet/a13"
+CONFIG_PATH="${NAFNET_DIR}/config_nafnet_attention.yaml"
 
 # Unified eval caps (controls overhead of epoch-end split evaluation).
 export UNIFIED_EVAL_MAX_ITEMS_TRAIN="${UNIFIED_EVAL_MAX_ITEMS_TRAIN:-512}"

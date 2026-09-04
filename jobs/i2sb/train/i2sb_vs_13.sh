@@ -19,10 +19,10 @@ export PYTHONUNBUFFERED=1
 export WANDB_MODE="disabled"
 
 DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
-RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/i2sb_vs"
+RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/i2sb"
 NAME="i2sb_13"
 
-python scripts/train_i2sb_vs.py \
+python scripts/train_i2sb.py \
   --name "$NAME" \
   --dataroot "$DATAROOT" \
   --results_dir "$RESULTS_DIR" \

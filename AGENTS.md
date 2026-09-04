@@ -1,8 +1,10 @@
 ## VSlite Agent Notes (cluster + repo conventions)
 
+**Benchmark framework spec:** see [`FRAMEWORK.md`](FRAMEWORK.md) for naming (`cislnet`, `swingan`, … — no `_i2i`/`_vs`), mandatory [`cislnet/train_interface.py`](cislnet/train_interface.py), jobs layout, ablation env vars, and new-model checklist.
+
 This repo mixes 4 “families” of code:
 
-- **Baseline pix2pix / contrastive_pix2pix**: training + patch-eval lives under `scripts/`.
+- **CISLNet (contrastive pix2pix)**: training + patch-eval lives under `scripts/`. Jobs: `jobs/cislnet/`. Ablation env guide: `jobs/_lib/ABLATIONS.md`.
 - **SwinGAN**: lives under `SwinGAN/` (plus Slurm entrypoints under `/u/akshahi2/jobs/swingan/...`).
 - **Restormer**: lives under `Restormer/` (plus Slurm entrypoints under `/u/akshahi2/jobs/restormer/...`).
 - **NAFNet**: lives under `NAFNet/` (plus Slurm entrypoints under `/u/akshahi2/jobs/nafnet/...`).
@@ -97,7 +99,7 @@ caveats. Treat this section as authoritative when someone proposes "just run at 
 
 - Baseline: `data/VS_dataset.py:472-482` always `cv2.resize`s patches to `opt.image_size`
   (default **1024**). It **ignores** `--load_size` / `--crop_size` from `BaseOptions`,
-  so flags like `--load_size 1024 --crop_size 512` in `jobs/baseline/train/*.sh` are
+  so flags like `--load_size 1024 --crop_size 512` in `jobs/cislnet/train/*.sh` are
   effectively no-ops; baseline is `train@1024 / test@1024` in practice.
 - SwinGAN: `SwinGAN/config_i2i_{baseline,attention}.yaml` `img_size: 512`. Threaded
   into `ProjectedSwinUnet` → `SwinTransformerSys(img_size=config.img_size, ...)` at
@@ -160,10 +162,10 @@ while s > latent_grid_size:
 
 Training is `image_size=512, latent_grid_size=16` → **n_down = 5**, channels
 `[128,128,128,256,256,512,512]`. The current default in
-`scripts/test_vqgan_vs.py:36-37` is `--image_size 1024 --latent_grid_size 16` →
+`scripts/test_vqgan.py:36-37` is `--image_size 1024 --latent_grid_size 16` →
 **n_down = 6**, which adds an extra `DownSampleBlock` + extra residuals. The
 state-dict keys then don't match a 512-trained checkpoint, and the load at
-`scripts/test_vqgan_vs.py:79` is `strict=True`, so it **crashes**.
+`scripts/test_vqgan.py:79` is `strict=True`, so it **crashes**.
 
 Correct inference at 1024 from a 512 checkpoint: pass `--image_size 1024
 --latent_grid_size 32`. That keeps `n_down=5`, the channel schedule is identical,
@@ -192,9 +194,9 @@ These are the authoritative queue scripts; the repo’s `jobs/` folder contains 
 
 #### Baseline (contrastive pix2pix)
 
-- **Train** (`jobs/baseline/train/`): `baseline_3.sh`, `baseline_6.sh`, `baseline_10.sh`, `baseline_13.sh` → `scripts/train.py` (same flags shape; channel count / IR indices differ per `NAME`).
-- **Patch eval + metrics** (`jobs/baseline/test/`): `test_3.sh`, `test_6.sh`, `test_10.sh`, `test_13.sh` → `scripts/vs_infer_and_metrics.py` (aligned: scavenger test partition, ConvNeXt FID env, 75k cap, train+test splits).
-- **WSI** (`jobs/baseline/wsi/`): `baseline_wsi_{3,6,10,13}_latest.sh` → `scripts/infer_wsi_png_baseline.py`.
+- **Train** (`jobs/cislnet/train/`): `train.sh` (parameterized via `NUM_CHANNELS`, `PATCH_SIZE`, `EPOCHS`); `train_job.sh` for 10→13 sequential.
+- **Patch eval + metrics** (`jobs/cislnet/test/`): `test.sh` → `scripts/vs_infer_and_metrics.py`.
+- **WSI** (`jobs/cislnet/wsi/`): `wsi.sh` → `scripts/infer_wsi_png_cislnet.py` (alias: `infer_wsi_png_baseline.py`).
 - **Multi-stage train** (optional): `train_job.sh` → two `scripts/train.py` runs (10ch then 13ch).
 
 #### SwinGAN Attention (often “sga”)
@@ -211,7 +213,7 @@ These were adjusted to support standardized patch eval output (defaulting to `la
 
 These were updated to:
 
-- write patch eval outputs under `results/swingan_i2i/test/.../patch_eval`
+- write patch eval outputs under `results/swingan/test/.../patch_eval`
 - default to `ckpt_latest.pth`
 - default `SKIP_WSI=1` path to skip slow WSI steps while debugging patch metrics
 
@@ -244,6 +246,16 @@ mirror the same patch-eval call pattern used in `restormer_attn_test_10.sh`.
 
 These were updated to run patch eval + metrics first and default to `SKIP_WSI=1`.
 
+### WSI local padding (Infinite_Texture_GANs)
+
+Optional seamless tiling via border context from previously generated tiles
+([Infinite_Texture_GANs](https://github.com/ai4netzero/Infinite_Texture_GANs)):
+
+- CLI: `--local_padding` (also `WSI_LOCAL_PADDING=1`)
+- Options: `--local_padding_size` (default 1), `--local_padding_outer` (`replicate` | `constant`)
+- Forces `batch_size=1` and row-major tile order when enabled
+- Implemented in `cislnet/wsi_local_padding.py`; wired into all `infer_wsi_png*.py` entrypoints
+
 ### Canonical WSI inference scripts (aligned)
 
 All WSI slurm scripts share the same shape: `chdir` to repo root, source `~/.bashrc`,
@@ -255,15 +267,15 @@ PNGs to `results/<model>/test/<run>/wsi_pred/`. Resources are unified at
 
 | Stack | Slurm script | Inference entrypoint | Output dir |
 |---|---|---|---|
-| Baseline 3ch | `jobs/baseline/wsi/baseline_wsi_3_latest.sh` | `scripts/infer_wsi_png_baseline.py` | `results/baseline/test/vs3/wsi_pred/` |
-| Baseline 6ch | `jobs/baseline/wsi/baseline_wsi_6_latest.sh` | `scripts/infer_wsi_png_baseline.py` | `results/baseline/test/vs6/wsi_pred/` |
-| Baseline 10ch | `jobs/baseline/wsi/baseline_wsi_10_latest.sh` | `scripts/infer_wsi_png_baseline.py` | `results/baseline/test/vs10/wsi_pred/` |
-| Baseline 13ch | `jobs/baseline/wsi/baseline_wsi_13_latest.sh` | `scripts/infer_wsi_png_baseline.py` | `results/baseline/test/vs13/wsi_pred/` |
-| SwinGAN attention | `jobs/swingan/attention/wsi/swingan_attn_wsi_13_latest.sh` | `SwinGAN/infer_wsi_png.py` | `results/swingan_i2i/test/a13/wsi_pred/` |
-| SwinGAN baseline | `jobs/swingan/baseline/wsi/swingan_base_wsi_13_latest.sh` | `SwinGAN/infer_wsi_png.py` | `results/swingan_i2i/test/b13/wsi_pred/` |
-| Restormer attention | `jobs/restormer/attention/wsi/restormer_attn_wsi_13_latest.sh` | `Restormer/infer_wsi_png.py` | `results/restormer_i2i/test/a13/wsi_pred/` |
-| Restormer attention (256px legacy run) | `jobs/restormer/attention/wsi/restormer_attn_wsi_13_legacy256.sh` | `Restormer/infer_wsi_png.py` | `results/restormer_i2i/test/a13_legacy256/wsi_pred/` |
-| VQGAN H&E AE | `jobs/vqgan/wsi/vqgan_wsi_latest.sh` | `scripts/infer_wsi_png_vqgan.py` | `results/vqgan_vs/test/vq_b/wsi_pred/` |
+| CISLNet 3ch | `jobs/cislnet/wsi/wsi.sh` (`NAME=c3`) | `scripts/infer_wsi_png_cislnet.py` | `results/cislnet/test/c3/wsi_pred/` |
+| CISLNet 6ch | `jobs/cislnet/wsi/wsi.sh` (`NAME=c6`) | `scripts/infer_wsi_png_cislnet.py` | `results/cislnet/test/c6/wsi_pred/` |
+| CISLNet 10ch | `jobs/cislnet/wsi/wsi.sh` (`NAME=c10`) | `scripts/infer_wsi_png_cislnet.py` | `results/cislnet/test/c10/wsi_pred/` |
+| CISLNet 13ch | `jobs/cislnet/wsi/wsi.sh` (`NAME=c13`) | `scripts/infer_wsi_png_cislnet.py` | `results/cislnet/test/c13/wsi_pred/` |
+| SwinGAN attention | `jobs/swingan/attention/wsi/swingan_attn_wsi_13_latest.sh` | `SwinGAN/infer_wsi_png.py` | `results/swingan/test/a13/wsi_pred/` |
+| SwinGAN base | `jobs/swingan/base/wsi/swingan_base_wsi_13_latest.sh` | `SwinGAN/infer_wsi_png.py` | `results/swingan/test/b13/wsi_pred/` |
+| Restormer attention | `jobs/restormer/attention/wsi/restormer_attn_wsi_13_latest.sh` | `Restormer/infer_wsi_png.py` | `results/restormer/test/a13/wsi_pred/` |
+| Restormer attention (256px legacy run) | `jobs/restormer/attention/wsi/restormer_attn_wsi_13_legacy256.sh` | `Restormer/infer_wsi_png.py` | `results/restormer/test/a13_legacy256/wsi_pred/` |
+| VQGAN H&E AE | `jobs/vqgan/wsi/vqgan_wsi_latest.sh` | `scripts/infer_wsi_png_vqgan.py` | `results/vqgan/test/vq_b/wsi_pred/` |
 
 Notes specific to VQGAN WSI inference:
 
@@ -275,7 +287,7 @@ Notes specific to VQGAN WSI inference:
   before tiling. Default `--tile_size 512` matches the training resolution
   (`image_size=512, latent_grid_size=16`, `n_down=5`); see the resolution rules
   above before tiling at 1024.
-- The script accepts both checkpoint formats produced by `scripts/train_vqgan_vs.py`:
+- The script accepts both checkpoint formats produced by `scripts/train_vqgan.py`:
   the dict payload at `<run>/checkpoints/ckpt_latest.pt` (key `vqgan`) and the bare
   `state_dict` at `<run>/checkpoints/vqgan_epoch_XXX.pt`. Default checkpoint is
   `ckpt_latest.pt`; override with `VQGAN_CKPT`.

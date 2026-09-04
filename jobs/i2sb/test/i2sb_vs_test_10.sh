@@ -19,7 +19,7 @@ export PYTHONUNBUFFERED=1
 export WANDB_MODE="disabled"
 
 DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
-RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/i2sb_vs"
+RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/i2sb"
 NAME="i2sb_10"
 NUM_TEST="${NUM_TEST:-75000}"
 FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-75000}"

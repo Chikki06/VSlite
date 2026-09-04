@@ -1,0 +1,8 @@
+# organ-exp holdout for Prostate
+3899-8
+3932-3
+3945-3
+4249-2
+Prost2a
+Prost3a
+Prost4a

@@ -16,6 +16,8 @@ source ~/.bashrc
 conda activate torchenv
 
 export PYTHONUNBUFFERED=1
+# 256px tiles: micro-batch 16 on A100 (override with WSI_BATCH_SIZE).
+export WSI_BATCH_SIZE="${WSI_BATCH_SIZE:-16}"
 
 VSLITE_ROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 WSI_PARENT="${VSLITE_ROOT}/input/IR"
@@ -23,16 +25,15 @@ WSI_PARENT="${VSLITE_ROOT}/input/IR"
 # Weights from archived 256px train; config must match img_size.
 LEGACY_DIR="${VSLITE_ROOT}/results_old/restormer_i2i/a13"
 CKPT_PATH="${RESTORMER_CKPT_PATH:-${LEGACY_DIR}/ckpt_latest.pth}"
-CONFIG_PATH="${VSLITE_ROOT}/Restormer/config_i2i_restormer_perceptual_img256.yaml"
+CONFIG_PATH="${VSLITE_ROOT}/Restormer/config_restormer_perceptual_img256.yaml"
 
 RUN_TAG="a13_legacy256"
-OUT_DIR="${VSLITE_ROOT}/results/restormer_i2i/test/${RUN_TAG}/wsi_pred"
+OUT_DIR="${VSLITE_ROOT}/results/restormer/test/${RUN_TAG}/wsi_pred"
 mkdir -p "$OUT_DIR"
 
-TILE_ARGS=()
-if [[ -n "${WSI_TILE_SIZE:-}" ]]; then
-  TILE_ARGS=(--tile_size "$WSI_TILE_SIZE")
-fi
+# Default 256 matches config_restormer_perceptual_img256.yaml (archived a13 train).
+TILE_SIZE="${WSI_TILE_SIZE:-256}"
+TILE_ARGS=(--tile_size "$TILE_SIZE")
 
 python "${VSLITE_ROOT}/Restormer/infer_wsi_png.py" \
   --ckpt "$CKPT_PATH" \

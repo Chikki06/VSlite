@@ -23,12 +23,15 @@ if str(_VSLITE_ROOT) not in sys.path:
 from SwinGAN.utils.dataset_vslite_i2i import SplitFractions, VSLiteI2IDataset
 from basicsr.models.archs.restormer_arch import Restormer
 from util.atomic_io import atomic_torch_save
-from util.fixed_preview import gather_fixed_preview_batch
 from util.run_logger import RunLogger, should_log_epoch_samples
-from util.sample_grid import save_unified_sample, split_batch_to_list
 from util.save_schedule import make_iter_schedule
-from util.unified_tb import build_unified_writer
+from util.tb_logger import UnifiedTBLogger
+from util.preview_manager import PreviewManager
+from util.early_stopping import EarlyStopping
 from util.eval_caps import eval_max_items_train, eval_max_items_val, eval_max_items_test
+from util.progressive_train import parse_progressive_schedule, phase_for_epoch
+from cislnet.apply_env import apply_i2i_env
+from cislnet.train_interface import VSliteTrainConfig, validate_train_config
 
 
 logger = logging.getLogger(__name__)
@@ -107,7 +110,7 @@ def validate(model, loader, device, l1_loss):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", type=str, default="config_i2i_restormer.yaml")
+    ap.add_argument("--config", type=str, default="config_restormer.yaml")
     args_cli = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -122,10 +125,12 @@ def main():
     cfg.grad_accum_steps = int(_get_env("RESTORMER_GRAD_ACCUM_STEPS", getattr(cfg, "grad_accum_steps", 1)))
     cfg.train_num_workers = int(_get_env("RESTORMER_TRAIN_NUM_WORKERS", getattr(cfg, "train_num_workers", 4)))
     cfg.val_num_workers = int(_get_env("RESTORMER_VAL_NUM_WORKERS", getattr(cfg, "val_num_workers", 2)))
+    cfg = apply_i2i_env(cfg)
 
-    # Perceptual loss defaults (match pix2pix path unless explicitly overridden).
-    cfg.vgg_normalize_input = bool(getattr(cfg, "vgg_normalize_input", True))
-    cfg.vgg_loss_include_input = bool(getattr(cfg, "vgg_loss_include_input", False))
+    cfg.convnext_normalize_input = bool(getattr(cfg, "convnext_normalize_input", True))
+    cfg.convnext_loss_include_input = bool(getattr(cfg, "convnext_loss_include_input", False))
+    cfg.vgg_normalize_input = cfg.convnext_normalize_input
+    cfg.vgg_loss_include_input = cfg.convnext_loss_include_input
 
     resume_ckpt_env = _get_env("RESTORMER_RESUME_CKPT", "")
     auto_resume = _env_bool("RESTORMER_AUTO_RESUME", True)
@@ -167,6 +172,7 @@ def main():
         num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
         img_size=int(getattr(cfg, "img_size", 256)),
         he_scale=str(getattr(cfg, "he_scale", "minus1_1")),
+        he_color_space=str(getattr(cfg, "he_color_space", "srgb")),
         split="train" if use_split else None,
         split_seed=int(getattr(cfg, "split_seed", 1337)),
         split_fracs=split_fracs,
@@ -178,6 +184,7 @@ def main():
         num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
         img_size=int(getattr(cfg, "img_size", 256)),
         he_scale=str(getattr(cfg, "he_scale", "minus1_1")),
+        he_color_space=str(getattr(cfg, "he_color_space", "srgb")),
         split="val" if use_split else None,
         split_seed=int(getattr(cfg, "split_seed", 1337)),
         split_fracs=split_fracs,
@@ -221,11 +228,32 @@ def main():
 
     writer = SummaryWriter(log_dir=os.path.join(cfg.output_dir, "tensorboard"))
     run_name = os.path.basename(os.path.abspath(cfg.output_dir))
-    u_writer, _u_tb = build_unified_writer(model="restormer_i2i", run=run_name)
+    num_ch = 10 if cfg.input_mode == "ir10" else 13
+    vcfg = VSliteTrainConfig(
+        model="restormer",
+        run=run_name,
+        num_channels=num_ch,
+        patch_size=int(getattr(cfg, "img_size", 512)),
+        batch_size=int(cfg.batch_size),
+        grad_accum_steps=int(getattr(cfg, "grad_accum_steps", 1)),
+        epochs=int(getattr(cfg, "epochs_n", 50)),
+        lr=float(getattr(cfg, "lr", 2e-4)),
+        weight_decay=float(getattr(cfg, "weight_decay", 0.0)),
+        early_stop_patience=int(_get_env("EARLY_STOP_PATIENCE", 0) or 0),
+        early_stop_min_delta=float(_get_env("EARLY_STOP_MIN_DELTA", 1e-4) or 1e-4),
+        progressive_schedule=str(_get_env("PROGRESSIVE_SCHEDULE", "") or ""),
+        output_dir=str(cfg.output_dir),
+    )
+    validate_train_config(vcfg)
+    tb = UnifiedTBLogger("restormer", run_name, run_dir=cfg.output_dir)
+    tb.log_meta(vcfg, epoch=0)
     run_logger = RunLogger(cfg.output_dir, name=run_name)
     run_logger.dump_opts(cfg_dict)
 
+    prog_phases = parse_progressive_schedule(vcfg.progressive_schedule)
     total_epochs = int(getattr(cfg, "epochs_n", 50))
+    if prog_phases:
+        total_epochs = sum(p.epochs for p in prog_phases)
     save_epoch_freq = int(getattr(cfg, "save_epoch_freq", 5))
     lambda_l1 = float(getattr(cfg, "lambda_l1", 1.0))
     lambda_perceptual = float(getattr(cfg, "lambda_perceptual", 0.0))
@@ -281,6 +309,7 @@ def main():
         num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
         img_size=int(getattr(cfg, "img_size", 256)),
         he_scale=str(getattr(cfg, "he_scale", "minus1_1")),
+        he_color_space=str(getattr(cfg, "he_color_space", "srgb")),
         split="test" if use_split else None,
         split_seed=int(getattr(cfg, "split_seed", 1337)),
         split_fracs=split_fracs,
@@ -306,6 +335,7 @@ def main():
         num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
         img_size=int(getattr(cfg, "img_size", 256)),
         he_scale=str(getattr(cfg, "he_scale", "minus1_1")),
+        he_color_space=str(getattr(cfg, "he_color_space", "srgb")),
         split="train" if use_split else None,
         split_seed=int(getattr(cfg, "split_seed", 1337)),
         split_fracs=split_fracs,
@@ -321,6 +351,7 @@ def main():
             num_ir_channels=int(getattr(cfg, "num_ir_channels", 10)),
             img_size=int(getattr(cfg, "img_size", 256)),
             he_scale=str(getattr(cfg, "he_scale", "minus1_1")),
+        he_color_space=str(getattr(cfg, "he_color_space", "srgb")),
             split="val" if use_split else None,
             split_seed=int(getattr(cfg, "split_seed", 1337)),
             split_fracs=split_fracs,
@@ -348,28 +379,55 @@ def main():
         persistent_workers=int(cfg.val_num_workers) > 0,
     )
 
-    fixed_preview = gather_fixed_preview_batch(val_loader, n=8)
     total_iters = max(1, int(total_epochs) * int(len(train_loader)))
     should_save_image = make_iter_schedule(total_iters, target_saves=50)
 
-    @torch.no_grad()
-    def _save_unified_preview(epoch_idx: int, step_idx: int) -> None:
-        if fixed_preview is None:
-            return
+    def _preview_forward(fixed_batch):
         was_train = model.training
         model.eval()
-        x_fp = fixed_preview["x"].to(device=device, dtype=torch.float32)
-        y_fp = fixed_preview["y"].to(device=device, dtype=torch.float32)
+        x_fp = fixed_batch["x"].to(device=device, dtype=torch.float32)
+        y_fp = fixed_batch["y"].to(device=device, dtype=torch.float32)
         y_hat_fp = torch.tanh(model(x_fp))
-        reals = split_batch_to_list(y_fp.detach().cpu())[:8]
-        preds = split_batch_to_list(y_hat_fp.detach().cpu())[:8]
-        name = f"epoch{int(epoch_idx) + 1:03d}_step{int(step_idx):09d}"
-        save_unified_sample(sample_dir, name, reals, preds, input_mode=cfg.input_mode)
         if was_train:
             model.train()
+        return y_fp, y_hat_fp
+
+    preview = PreviewManager(
+        preview_loader=val_loader,
+        out_dir=sample_dir,
+        tb=tb,
+        should_save=should_save_image,
+        forward_fn=_preview_forward,
+        input_mode=cfg.input_mode,
+        preview_tile_list=_get_env("PREVIEW_TILE_LIST", None),
+    )
+
+    early = EarlyStopping(
+        patience=int(vcfg.early_stop_patience),
+        min_delta=float(vcfg.early_stop_min_delta),
+    )
+
+    def _save_best():
+        ckpt = {
+            "epoch": max(0, int(early.state.best_epoch) - 1),
+            "global_step": global_step,
+            "model_state": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "config": cfg_dict,
+            "input_mode": cfg.input_mode,
+        }
+        if amp_enabled:
+            ckpt["scaler"] = scaler.state_dict()
+        atomic_torch_save(torch.save, ckpt, os.path.join(cfg.output_dir, "ckpt_best.pth"))
 
     accum = max(1, int(getattr(cfg, "grad_accum_steps", 1)))
     for epoch in range(start_epoch, total_epochs):
+        if prog_phases:
+            ph = phase_for_epoch(prog_phases, epoch + 1)
+            if ph is not None and int(ph.patch_size) != int(getattr(cfg, "img_size", 512)):
+                cfg.img_size = int(ph.patch_size)
+                # Progressive resize: rebuild loaders (simplified — full rebuild next epoch)
+                logger.info("Progressive phase patch_size=%d", ph.patch_size)
         model.train()
         epoch_start_time = time.time()
         last_iter_time = time.time()
@@ -433,18 +491,36 @@ def main():
                 )
 
             if should_save_image(global_step - 1):
-                _save_unified_preview(epoch, global_step)
+                preview.maybe_save(epoch + 1, global_step)
                 run_logger.write_iter(epoch + 1, global_step)
+            tb.log_train_scalars(
+                {"l1": float(loss_l1.item()), **(
+                    {"perc": float(loss_perc.item())} if perceptual_loss_fn is not None else {}
+                )},
+                global_step,
+            )
 
         epoch_sec = int(time.time() - epoch_start_time)
         train_l1 = validate(model, train_eval_loader, device, l1)
         val_l1 = validate(model, val_eval_loader, device, l1)
         test_l1 = validate(model, test_loader, device, l1)
         writer.add_scalar("val/l1", float(val_l1) if not np.isnan(val_l1) else 0.0, epoch)
-        u_writer.add_scalar("l1/train", float(train_l1) if not np.isnan(train_l1) else 0.0, epoch)
-        u_writer.add_scalar("l1/val", float(val_l1) if not np.isnan(val_l1) else 0.0, epoch)
-        u_writer.add_scalar("l1/test", float(test_l1) if not np.isnan(test_l1) else 0.0, epoch)
-        u_writer.add_scalar("meta/epoch_sec", float(epoch_sec), epoch)
+        tb.log_epoch_l1(
+            float(train_l1) if not np.isnan(train_l1) else 0.0,
+            float(val_l1) if not np.isnan(val_l1) else 0.0,
+            float(test_l1) if not np.isnan(test_l1) else 0.0,
+            epoch + 1,
+        )
+        tb.log_scalar("meta/epoch_sec", float(epoch_sec), epoch + 1)
+        if not np.isnan(val_l1):
+            improved = early.step(float(val_l1), epoch + 1)
+            if improved and vcfg.early_stop_patience > 0:
+                _save_best()
+            if early.should_stop():
+                tb.log_early_stop(early.state.best_value, epoch + 1)
+                logger.info("Early stopping at epoch %d (best val L1 %.6f)", epoch + 1, early.state.best_value)
+                preview.save_epoch_end(epoch + 1, global_step)
+                break
         logger.info(
             "End of epoch %d / %d \t Time Taken: %d sec \t train_l1: %s \t val_l1: %s \t test_l1: %s",
             epoch + 1,
@@ -471,12 +547,11 @@ def main():
             atomic_torch_save(torch.save, ckpt, os.path.join(cfg.output_dir, f"ckpt_epoch{epoch + 1}.pth"))
             logger.info("Saved checkpoint epoch %d", epoch + 1)
 
-        # End-of-epoch composite save (always, even if the iter schedule didn't fire).
-        _save_unified_preview(epoch, global_step)
+        preview.save_epoch_end(epoch + 1, global_step)
         run_logger.write_iter(epoch + 1, global_step)
 
     writer.close()
-    u_writer.close()
+    tb.close()
 
 
 if __name__ == "__main__":

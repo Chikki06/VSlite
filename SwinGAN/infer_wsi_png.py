@@ -6,9 +6,8 @@ script in the repo (Restormer, NAFNet, VQGAN). The key invariant is:
   * IR and VIS sources are kept as LAZY handles (`spectral.open_memmap` /
     `PIL.Image.open`) inside `FolderData`. They are NEVER fully materialized
     into RAM and NEVER bulk-moved to GPU.
-  * `infer_folder` (and the per-model variants in Restormer/NAFNet/VQGAN)
-    reads exactly one tile-sized window at a time and ships only that tile
-    to GPU.
+  * `infer_folder` micro-batches tiles on GPU (see `WSI_BATCH_SIZE` / `--batch_size`).
+    Only tile-sized windows are read from disk at a time.
 
 Earlier versions of this file did `np.array(image.load())` for the entire
 WSI and `data.vis.to(device)` for the entire WSI, which OOM-killed the
@@ -22,9 +21,15 @@ import argparse
 import gc
 import math
 import os
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional, Tuple
+
+_VSLITE_ROOT = Path(__file__).resolve().parents[1]
+if str(_VSLITE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_VSLITE_ROOT))
 
 import numpy as np
 from PIL import Image
@@ -33,7 +38,31 @@ import torch
 import torch.nn.functional as F
 import yaml
 
+from cislnet.wsi_local_padding import (  # noqa: E402
+    LocalPaddingConfig,
+    WSILocalPaddingState,
+    add_local_padding_cli_args,
+    effective_wsi_batch_size,
+    resolve_local_padding_config,
+)
+
 Image.MAX_IMAGE_PIXELS = None
+
+INT32_INDEX_MAX = 2_147_483_647
+
+
+def resolve_wsi_batch_size(cli_batch_size: Optional[int], tile_size: int) -> int:
+    """Resolve micro-batch size: CLI > WSI_BATCH_SIZE env > tile-size heuristic."""
+    if cli_batch_size is not None:
+        return max(1, int(cli_batch_size))
+    env = os.environ.get("WSI_BATCH_SIZE", "").strip()
+    if env:
+        return max(1, int(env))
+    if tile_size <= 256:
+        return 16
+    if tile_size <= 512:
+        return 4
+    return 2
 
 
 @dataclass
@@ -257,11 +286,12 @@ def read_ir_tile_to_device(
     x1_tgt: int,
     tile_size: int,
     device: torch.device,
+    num_ir_channels: int = 10,
 ) -> torch.Tensor:
-    """Read an IR tile from disk and return it (1, C, tile_size, tile_size) on device.
+    """Read an IR tile (1, C, tile_size, tile_size) on device in [0, 1].
 
-    Coordinates are in TARGET (0.69 um/px) pixel space; the IR source lives at
-    2.0 um/px, so we scale by 0.69/2.0 and bicubic-upsample to `tile_size`.
+    Target coords are 0.69 µm/px; IR source is 2.0 µm/px (scale 0.69/2.0).
+    Matches VSLiteI2IDataset: clip [0, 5], divide by 5, bilinear resize.
     """
     scaling_factor = 0.69 / 2.0
     y0 = int(y0_tgt * scaling_factor)
@@ -270,13 +300,22 @@ def read_ir_tile_to_device(
     x1 = int(x1_tgt * scaling_factor)
     ir_patch_hwc = read_ir_patch_hwc(data.ir, y0=y0, y1=y1, x0=x0, x1=x1)
     ir_patch = torch.from_numpy(np.transpose(ir_patch_hwc, (2, 0, 1))).unsqueeze(0)
-    ir_patch = ir_patch.to(device=device, dtype=torch.float32, non_blocking=True).clamp(0.0, 5.0)
+    ir_patch = ir_patch.to(device=device, dtype=torch.float32, non_blocking=True)
+    n_ir = int(num_ir_channels)
+    if ir_patch.shape[1] > n_ir:
+        ir_patch = ir_patch[:, :n_ir]
+    ir_patch = ir_patch.clamp(0.0, 5.0) / 5.0
     target_lr = int(tile_size * scaling_factor)
     pad_rows = max(0, target_lr - ir_patch.shape[2])
     pad_cols = max(0, target_lr - ir_patch.shape[3])
     if pad_rows or pad_cols:
         ir_patch = F.pad(ir_patch, (0, pad_cols, 0, pad_rows), mode="constant", value=0.0)
-    ir_patch = F.interpolate(ir_patch, size=(tile_size, tile_size), mode="bicubic", align_corners=True)
+    ir_patch = F.interpolate(
+        ir_patch,
+        size=(tile_size, tile_size),
+        mode="bilinear",
+        align_corners=False,
+    )
     return ir_patch
 
 
@@ -336,12 +375,26 @@ def build_model(config_path: str, ckpt_path: str, model_type: int, device: torch
     return G
 
 
+def _tanh_out_to_tile_u8(y_chw: torch.Tensor, *, dh: int, dw: int) -> np.ndarray:
+    """CHW in [-1, 1] -> uint8 HWC of size (dh, dw)."""
+    y_np = y_chw.clamp(-1.0, 1.0).detach().float().cpu().numpy()
+    y_np = np.transpose(y_np, (1, 2, 0))
+    if y_np.shape[0] != dh or y_np.shape[1] != dw:
+        t = torch.from_numpy(np.transpose(y_np, (2, 0, 1))).unsqueeze(0)
+        t = F.interpolate(t, size=(dh, dw), mode="bilinear", align_corners=False)
+        y_np = np.transpose(t.squeeze(0).numpy(), (1, 2, 0))
+    return np.ascontiguousarray(np.clip((y_np * 0.5 + 0.5) * 255.0, 0, 255).astype(np.uint8))
+
+
 def infer_folder(
     G,
     data: FolderData,
     model_type: int,
     tile_size: int,
     device: torch.device,
+    *,
+    batch_size: int = 8,
+    local_padding: Optional[LocalPaddingConfig] = None,
 ) -> np.ndarray:
     r, c = output_geometry(data, model_type)
 
@@ -352,45 +405,110 @@ def infer_folder(
     I = list(range(0, rn * tile_size + 1, tile_size))
     J = list(range(0, cn * tile_size + 1, tile_size))
 
+    tile_coords = [
+        (ii, jj, int(I[ii + 1] - I[ii]), int(J[jj + 1] - J[jj]))
+        for ii in range(len(I) - 1)
+        for jj in range(len(J) - 1)
+    ]
+
+    in_chans = 13 if int(model_type) == 1 else 10
+    max_bs_int32 = max(1, INT32_INDEX_MAX // (in_chans * tile_size * tile_size * 4 * 8))
+    requested_bs = max(1, int(batch_size))
+    bs = min(requested_bs, max_bs_int32)
+    if bs != requested_bs:
+        print(
+            f"[WSI] Requested batch_size={requested_bs} exceeds int32-safe cap={max_bs_int32} "
+            f"at tile_size={tile_size}; using {bs}.",
+            flush=True,
+        )
+
+    use_vis = int(model_type) == 1
+    lp_cfg = local_padding or LocalPaddingConfig(enabled=False)
+    bs = effective_wsi_batch_size(bs, lp_cfg)
+    lp_state = WSILocalPaddingState(lp_cfg) if lp_cfg.enabled else None
+    vis_offset = in_chans - 3 if use_vis else in_chans
+    n_tiles = len(tile_coords)
+    lp_tag = f" local_padding=1 ps={lp_cfg.padding_size} outer={lp_cfg.outer_padding}" if lp_cfg.enabled else ""
+    print(
+        f"[WSI] {n_tiles} tiles, batch_size={bs}, tile_size={tile_size}, in_chans={in_chans}{lp_tag}",
+        flush=True,
+    )
+
     with torch.no_grad():
-        for ii in range(len(I) - 1):
-            for jj in range(len(J) - 1):
-                ir_patch = read_ir_tile_to_device(
-                    data,
-                    y0_tgt=I[ii],
-                    y1_tgt=I[ii + 1],
-                    x0_tgt=J[jj],
-                    x1_tgt=J[jj + 1],
-                    tile_size=tile_size,
-                    device=device,
-                )
+        for b0 in range(0, n_tiles, bs):
+            batch = tile_coords[b0 : b0 + bs]
+            sub_bs = len(batch)
 
-                if int(model_type) == 1:
-                    vis_patch = read_vis_tile_to_device(
-                        data,
-                        y0_tgt=I[ii],
-                        y1_tgt=I[ii + 1],
-                        x0_tgt=J[jj],
-                        x1_tgt=J[jj + 1],
-                        tile_size=tile_size,
-                        device=device,
-                    )
-                    x = torch.cat([ir_patch, vis_patch], dim=1)
-                else:
-                    vis_patch = None
-                    x = ir_patch
+            while sub_bs > 0:
+                sub_batch = batch[:sub_bs]
+                x_batch = torch.empty((sub_bs, in_chans, tile_size, tile_size), device=device, dtype=torch.float32)
 
-                y_hat = torch.tanh(G(x))
-                y_np = (y_hat[0].clamp(-1.0, 1.0).cpu().numpy() * 0.5) + 0.5
-                y_u8 = np.clip(y_np * 255.0, 0, 255).astype(np.uint8)
-                out[I[ii] : I[ii + 1], J[jj] : J[jj + 1], :] = np.transpose(y_u8, (1, 2, 0))
+                try:
+                    for slot, (ii, jj, _, _) in enumerate(sub_batch):
+                        if lp_state is not None and jj == 0:
+                            lp_state.on_new_row()
+                        ir_patch = read_ir_tile_to_device(
+                            data,
+                            y0_tgt=I[ii],
+                            y1_tgt=I[ii + 1],
+                            x0_tgt=J[jj],
+                            x1_tgt=J[jj + 1],
+                            tile_size=tile_size,
+                            device=device,
+                        )
+                        if use_vis:
+                            vis_patch = read_vis_tile_to_device(
+                                data,
+                                y0_tgt=I[ii],
+                                y1_tgt=I[ii + 1],
+                                x0_tgt=J[jj],
+                                x1_tgt=J[jj + 1],
+                                tile_size=tile_size,
+                                device=device,
+                            )
+                            x_tile = torch.cat([ir_patch, vis_patch], dim=1)[0]
+                        else:
+                            x_tile = ir_patch[0]
+                        if lp_state is not None:
+                            x_tile = lp_state.apply_to_input(
+                                x_tile, ii=ii, jj=jj, vis_offset=vis_offset
+                            )
+                        x_batch[slot] = x_tile
 
-                del ir_patch, x, y_hat, y_np, y_u8
-                if vis_patch is not None:
-                    del vis_patch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            gc.collect()
+                    y_hat = torch.tanh(G(x_batch))
+
+                except RuntimeError as e:
+                    msg = str(e).lower()
+                    if sub_bs > 1 and ("out of memory" in msg or "32-bit index math" in msg):
+                        new_sub_bs = max(1, sub_bs // 2)
+                        print(f"[WSI] OOM at sub_batch={sub_bs}; retrying with {new_sub_bs}.", flush=True)
+                        del x_batch
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        gc.collect()
+                        sub_bs = new_sub_bs
+                        continue
+                    raise
+
+                if y_hat.dim() == 3:
+                    y_hat = y_hat.unsqueeze(0)
+
+                for kk, (ii, jj, dh, dw) in enumerate(sub_batch):
+                    out[I[ii] : I[ii + 1], J[jj] : J[jj + 1], :] = _tanh_out_to_tile_u8(y_hat[kk], dh=dh, dw=dw)
+                    if lp_state is not None:
+                        n_ii = len(I) - 1
+                        n_jj = len(J) - 1
+                        lp_state.update_after_tile(
+                            x_input=x_batch[kk],
+                            y_output=y_hat[kk],
+                            vis_offset=vis_offset,
+                            is_last_col=(jj == n_jj - 1),
+                            is_last_row=(ii == n_ii - 1),
+                        )
+
+                del x_batch, y_hat
+                batch = batch[sub_bs:]
+                sub_bs = len(batch)
 
     out = out[:r, :c, :]
     return out
@@ -401,7 +519,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ckpt", required=True, type=str, help="Path to SwinGAN checkpoint (.pth)")
     p.add_argument(
         "--config",
-        default="/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN/config_i2i_baseline.yaml",
+        default="/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN/config_base.yaml",
         type=str,
         help="SwinGAN config used to build the generator",
     )
@@ -415,6 +533,13 @@ def parse_args() -> argparse.Namespace:
         help="Output directory for PNG files (default: <ckpt_dir>/wsi_png)",
     )
     p.add_argument("--tile_size", type=int, default=None, help="Patch size for model inference")
+    p.add_argument(
+        "--batch_size",
+        type=int,
+        default=None,
+        help="GPU micro-batch size in tiles (default: WSI_BATCH_SIZE env, else tile-size heuristic)",
+    )
+    add_local_padding_cli_args(p)
     return p.parse_args()
 
 
@@ -426,6 +551,24 @@ def main() -> None:
 
     cfg = load_config(args.config)
     tile_size = int(args.tile_size if args.tile_size is not None else getattr(cfg, "img_size", 256))
+    lp_cfg = resolve_local_padding_config(
+        local_padding=bool(getattr(args, "local_padding", False)),
+        local_padding_size=int(getattr(args, "local_padding_size", 1)),
+        local_padding_outer=str(getattr(args, "local_padding_outer", "replicate")),
+    )
+    batch_size = resolve_wsi_batch_size(args.batch_size, tile_size)
+    cfg_img_size = int(getattr(cfg, "img_size", tile_size))
+    if tile_size != cfg_img_size:
+        raise ValueError(
+            f"SwinGAN WSI requires tile_size={cfg_img_size} (config img_size); got tile_size={tile_size}. "
+            "Do not run at another resolution without rebuilding the model."
+        )
+    print(
+        f"SwinGAN WSI: tile_size={tile_size} batch_size={batch_size} "
+        f"model_type={args.model} ckpt={args.ckpt}"
+        + (f" local_padding=1 ps={lp_cfg.padding_size}" if lp_cfg.enabled else ""),
+        flush=True,
+    )
 
     if args.output_dir is None:
         output_dir = os.path.join(os.path.dirname(os.path.abspath(args.ckpt)), "wsi_png")
@@ -449,7 +592,15 @@ def main() -> None:
         print(f"Processing {folder_name} ...", flush=True)
         loader = VSLiteFolderLoader(parent, folder_name, args.model)
         data = loader.load()
-        pred = infer_folder(G, data, args.model, tile_size=tile_size, device=device)
+        pred = infer_folder(
+            G,
+            data,
+            args.model,
+            tile_size=tile_size,
+            device=device,
+            batch_size=batch_size,
+            local_padding=lp_cfg,
+        )
 
         suffix = "13ch" if int(args.model) == 1 else "10ch"
         out_path = os.path.join(output_dir, f"{folder_name}_{suffix}.png")

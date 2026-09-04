@@ -19,7 +19,7 @@ export PYTHONUNBUFFERED=1
 
 VSLITE_ROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 WSI_PARENT="${VSLITE_ROOT}/input/IR"
-RESULTS_DIR="${VSLITE_ROOT}/results/vqgan_vs"
+RESULTS_DIR="${VSLITE_ROOT}/results/vqgan"
 NAME="${VQGAN_NAME:-vq_b}"
 CKPT="${VQGAN_CKPT:-ckpt_latest.pt}"
 

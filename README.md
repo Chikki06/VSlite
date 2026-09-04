@@ -29,7 +29,7 @@ The repository is modularized based on architecture, dependencies, and functiona
 | `**legacy/**`                          | **DEPRECATED**. Archived profiling scripts, old `final_code` clones, jupyter notebooks, and unused experiments (`DRB.py`, `memory_optimized` scripts). Files here are entirely disconnected from active training. |
 | `scripts/train.py`                     | Training execution entrypoint for the **Pix2Pix** baseline.                                                                                                                                                       |
 | `scripts/test.py`                      | Inference execution entrypoint for the **Pix2Pix** baseline.                                                                                                                                                      |
-| `scripts/train_vqgan_vs.py`            | Train VQGAN autoencoder on H&E targets (used by diffusion stacks).                                                                                                                                                |
+| `scripts/train_vqgan.py`            | Train VQGAN autoencoder on H&E targets (used by diffusion stacks).                                                                                                                                                |
 | `environment.yml` / `requirements.txt` | Python package dependency declarations.                                                                                                                                                                           |
 | `pytest.ini`                           | Pytest environment configuration settings.                                                                                                                                                                        |
 
@@ -52,8 +52,8 @@ All model families are intended to use the same dataset root:
 
 Deterministic split is defined by **sample IDs / prefixes**:
 
-- `dataset/data_frozen/test.txt` (authoritative test split)
-- `dataset/data_frozen/val.txt` (authoritative val split)
+- `dataset/data_frozen/test.txt` (authoritative held-out split; includes former val samples `10442`, `3840`)
+- `dataset/data_frozen/val.txt` (present but empty — classic CISLNet does not use a true val split)
 
 ### Who reads `val.txt` / `test.txt`?
 
@@ -118,7 +118,7 @@ python scripts/train.py --input_nc 13 --num_ir_channels 10 --name vs13
 ### VQGAN (argparse, resumable)
 
 ```bash
-python scripts/train_vqgan_vs.py --name vq_b --dataroot dataset/data_frozen --image_size 512 --amp --resume auto
+python scripts/train_vqgan.py --name vq_b --dataroot dataset/data_frozen --image_size 512 --amp --resume auto
 ```
 
 ## Train job “head-to-head” (default parameters)
@@ -295,7 +295,7 @@ flowchart LR
 
 ### 5) VQGAN-HE — H&E autoencoder (not a translator)
 
-- **Train job → entrypoint:** [/u/akshahi2/jobs/vqgan/train/vqgan_he_train.sh](/u/akshahi2/jobs/vqgan/train/vqgan_he_train.sh) → [scripts/train_vqgan_vs.py](scripts/train_vqgan_vs.py). Architecture imported from `third_party/VQGAN-pytorch` via [diffusion_vs/vqgan_vs.py](diffusion_vs/vqgan_vs.py).
+- **Train job → entrypoint:** [/u/akshahi2/jobs/vqgan/train/vqgan_he_train.sh](/u/akshahi2/jobs/vqgan/train/vqgan_he_train.sh) → [scripts/train_vqgan.py](scripts/train_vqgan.py). Architecture imported from `third_party/VQGAN-pytorch` via [diffusion_vs/vqgan_vs.py](diffusion_vs/vqgan_vs.py).
 - **Purpose:** **not** virtual staining. This trains a VQGAN autoencoder that maps `512×512` H&E patches **to themselves**, producing a quantized **16×16×3** discrete latent (`latent_grid_size=16`, `latent_dim=256`, codebook of `4096` entries). The trained checkpoint is later loaded as the VAE in BBDM's latent diffusion (see §6).
 - **Architecture:** standard VQGAN — Encoder (Conv + ResBlocks + Downsamples) → vector quantizer (codebook lookup with straight-through estimator and commitment loss, β=0.25) → Decoder (ResBlocks + Upsamples + Conv). Both sides operate on 3-channel images.
 - **Discriminator:** PatchGAN (`build_vqgan_discriminator` in [diffusion_vs/vqgan_vs.py](diffusion_vs/vqgan_vs.py)), **enabled only after `disc_start=10000` iterations**.
@@ -327,7 +327,7 @@ flowchart LR
 - **Train jobs → entrypoint:**
   - upstream-VAE variant: [/u/akshahi2/jobs/bbdm/train/lbbdm_vs13_base_train.sh](/u/akshahi2/jobs/bbdm/train/lbbdm_vs13_base_train.sh) + [diffusion_vs/configs/bbdm_vs/lbbdm_vs13_vqmodel.yaml](diffusion_vs/configs/bbdm_vs/lbbdm_vs13_vqmodel.yaml) (uses pretrained `CelebAMaskHQ-f4` VAE)
   - custom-VAE variant: [/u/akshahi2/jobs/bbdm/train/lbbdm_vs13_custom_train.sh](/u/akshahi2/jobs/bbdm/train/lbbdm_vs13_custom_train.sh) + [diffusion_vs/configs/bbdm_vs/lbbdm_vs13_vqgan_pytorch_convnext.yaml](diffusion_vs/configs/bbdm_vs/lbbdm_vs13_vqgan_pytorch_convnext.yaml) (uses our **VQGAN-HE** from §5 as the VAE, and TCGA ConvNeXt features for conditioning)
-  - both → [scripts/train_bbdm_vs.py](scripts/train_bbdm_vs.py).
+  - both → [scripts/train_bbdm.py](scripts/train_bbdm.py).
 - **Idea:** instead of a standard $x_T \to x_0$ noise→data diffusion, a **Brownian Bridge** learns a stochastic process that **starts at the condition $z_T$ and ends at the target $z_0$** (both already H&E-like 3ch images / ConvNeXt features of the IR input). Diffusion is run **in VQGAN latent space** (256-px pixel input → 64×64×3 latent after the $f=4$ VAE), which is much cheaper than pixel-space diffusion.
 - **Backbone:** ADM-style UNet (`UNetParams` in the YAML): `image_size=64`, `model_channels=128`, `channel_mult=[1,4,8]`, `num_res_blocks=2`, `attention_resolutions=[32,16,8]`, `num_heads=8`, `num_head_channels=64`. The custom variant adds `use_spatial_transformer=True` with `context_dim=256` so the UNet cross-attends into ConvNeXt features extracted from the IR conditioning.
 - **Conditioning:** `CondStageParams` (2 stages, 3→3 channels). The custom variant additionally loads `convnext_feature.pt` to encode the IR/VIS input into 256-d tokens consumed by the UNet's cross-attention layers.
@@ -361,7 +361,7 @@ flowchart LR
 
 ### 7) I2SB — Image-to-Image Schrödinger Bridge
 
-- **Train job → entrypoint:** [/u/akshahi2/jobs/i2sb/train/i2sb_vs_13.sh](/u/akshahi2/jobs/i2sb/train/i2sb_vs_13.sh) → [scripts/train_i2sb_vs.py](scripts/train_i2sb_vs.py). The Runner and conditional ADM UNet come from `third_party/I2SB` (NVlabs).
+- **Train job → entrypoint:** [/u/akshahi2/jobs/i2sb/train/i2sb_vs_13.sh](/u/akshahi2/jobs/i2sb/train/i2sb_vs_13.sh) → [scripts/train_i2sb.py](scripts/train_i2sb.py). The Runner and conditional ADM UNet come from `third_party/I2SB` (NVlabs).
 - **Idea:** the Schrödinger Bridge is a stochastic process that interpolates between **two arbitrary distributions** $p_0$ and $p_1$ over a finite time interval. Here:
   - $x_0$ = real H&E patch (3ch);
   - $x_1$ = a learned 3-channel projection of the IR(+VIS) input, produced by `CondToRGB` in [diffusion_vs/i2sb_vs.py](diffusion_vs/i2sb_vs.py) (a single 1×1 conv from 10 or 13 → 3, with `tanh` output).
@@ -440,7 +440,7 @@ Every model is evaluated with the same 3-step flow so results across stacks are 
 | SwinGAN base / attn   | [SwinGAN/test_i2i.py](SwinGAN/test_i2i.py)                         | 512×512                  | —                        | `ckpt_latest.pth`                                |
 | Restormer base / perc | [Restormer/test_i2i_restormer.py](Restormer/test_i2i_restormer.py) | 512×512                  | —                        | `ckpt_epoch_30.pth` → fallback `ckpt_latest.pth` |
 | NAFNet base / attn    | [NAFNet/test_i2i_nafnet.py](NAFNet/test_i2i_nafnet.py)             | 256×256                  | —                        | `ckpt_latest.pth`                                |
-| VQGAN-HE              | [scripts/test_vqgan_vs.py](scripts/test_vqgan_vs.py)               | 512×512                  | — (1-shot encode→decode) | `vqgan_epoch_049.pt`                             |
+| VQGAN-HE              | [scripts/test_vqgan.py](scripts/test_vqgan.py)               | 512×512                  | — (1-shot encode→decode) | `vqgan_epoch_049.pt`                             |
 | BBDM                  | [scripts/test_bbdm_vs.py](scripts/test_bbdm_vs.py)                 | 256×256 (latent 64×64×3) | `sample_step=200`        | `LBBDM-vslite-*/checkpoint/latest.ckpt`          |
 | I2SB                  | [scripts/test_i2sb_vs.py](scripts/test_i2sb_vs.py)                 | 256×256                  | `--nfe 200`              | `<run>/latest.pt`                                |
 

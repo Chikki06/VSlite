@@ -2,7 +2,7 @@
 Patch inference + metrics for the VQGAN H&E autoencoder.
 
 Writes metrics under:
-  results/vqgan_vs/test/<run_name>/patch_eval_test/metrics.{json,yaml}
+  results/vqgan/test/<run_name>/patch_eval_test/metrics.{json,yaml}
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", type=str, required=True, help="run name under results_dir (vqgan_vs/<name>/checkpoints/...)")
     ap.add_argument("--dataroot", type=str, required=True)
-    ap.add_argument("--results_dir", type=str, default="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs")
+    ap.add_argument("--results_dir", type=str, default="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan")
     ap.add_argument("--ckpt", type=str, required=True, help="checkpoint filename under <run>/checkpoints/")
     ap.add_argument("--input_nc", type=int, default=13, choices=[10, 13])
     ap.add_argument("--num_ir_channels", type=int, default=10)
@@ -131,6 +131,8 @@ def main() -> None:
         "ssim_mean": res.ssim_mean,
         "ssim_std": res.ssim_std,
         "fid": res.fid,
+        "lpips_convnext_tcga_mean": res.lpips_convnext_tcga_mean,
+        "lpips_convnext_tcga_std": res.lpips_convnext_tcga_std,
         "split": str(args.split),
         "name": str(args.name),
         "ckpt": str(args.ckpt),
@@ -153,6 +155,11 @@ def main() -> None:
                 f"PSNR_test: {metrics['psnr_mean']:.3f}" if metrics["psnr_mean"] is not None else "PSNR_test: nan",
                 f"SSIM_test: {metrics['ssim_mean']:.3f}" if metrics["ssim_mean"] is not None else "SSIM_test: nan",
                 f"FID_test: {metrics['fid']:.3f}" if metrics["fid"] is not None else "FID_test: nan",
+                (
+                    f"LPIPS_convnext_tcga_test: {metrics['lpips_convnext_tcga_mean']:.3f}"
+                    if metrics["lpips_convnext_tcga_mean"] is not None
+                    else "LPIPS_convnext_tcga_test: nan"
+                ),
             ]
         )
     )

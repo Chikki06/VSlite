@@ -29,8 +29,8 @@ export UNIFIED_EVAL_MAX_ITEMS_TEST="${UNIFIED_EVAL_MAX_ITEMS_TEST:-512}"
 
 export SWINGAN_INPUT_MODE="ir10"
 SWINGAN_RUN_TAG="a10"
-export SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan_i2i/${SWINGAN_RUN_TAG}}"
-CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_attention.yaml"
+export SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan/${SWINGAN_RUN_TAG}}"
+CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_attention.yaml"
 
 python train_i2i.py --config "$CONFIG_PATH"
 

@@ -116,7 +116,7 @@ def _save_standard_dirs(root: str, name: str, x: torch.Tensor, y: torch.Tensor, 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", type=str, default="config_i2i_baseline.yaml")
+    ap.add_argument("--config", type=str, default="config_base.yaml")
     ap.add_argument("--ckpt", type=str, required=True)
     ap.add_argument("--num_samples", type=int, default=20)
     ap.add_argument("--split", type=str, default="test")
@@ -226,6 +226,8 @@ def main():
         "ssim_mean": res.ssim_mean,
         "ssim_std": res.ssim_std,
         "fid": res.fid,
+        "lpips_convnext_tcga_mean": res.lpips_convnext_tcga_mean,
+        "lpips_convnext_tcga_std": res.lpips_convnext_tcga_std,
     }
     with open(os.path.join(out_dir, "metrics.yaml"), "w") as f:
         yaml.safe_dump(summary, f)
@@ -240,6 +242,11 @@ def main():
                 f"PSNR_test: {summary['psnr_mean']:.3f}" if summary["psnr_mean"] is not None else "PSNR_test: nan",
                 f"SSIM_test: {summary['ssim_mean']:.3f}" if summary["ssim_mean"] is not None else "SSIM_test: nan",
                 f"FID_test: {summary['fid']:.3f}" if summary["fid"] is not None else "FID_test: nan",
+                (
+                    f"LPIPS_convnext_tcga_test: {summary['lpips_convnext_tcga_mean']:.3f}"
+                    if summary["lpips_convnext_tcga_mean"] is not None
+                    else "LPIPS_convnext_tcga_test: nan"
+                ),
             ]
         )
     )

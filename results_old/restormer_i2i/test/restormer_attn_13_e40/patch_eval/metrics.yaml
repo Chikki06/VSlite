@@ -1,4 +1,4 @@
-ckpt: /projects/illinois/eng/bioe/rxb/akshat/VSlite/results/restormer_i2i/a13/ckpt_epoch40.pth
+ckpt: /projects/illinois/eng/bioe/rxb/akshat/VSlite/results/restormer/a13/ckpt_epoch40.pth
 fid: 25.269436882565287
 n: 3322
 psnr_mean: 20.342113732608393

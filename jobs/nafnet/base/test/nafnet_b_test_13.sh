@@ -17,13 +17,13 @@ conda activate torchenv
 
 source /u/akshahi2/jobs/nafnet/nafnet_inc.sh
 
-export NAFNET_OUTPUT_DIR="${VSLITE_DIR}/results/nafnet_i2i/b13"
+export NAFNET_OUTPUT_DIR="${VSLITE_DIR}/results/nafnet/b13"
 export NAFNET_INPUT_MODE="irvis13"
-CONFIG_FILE="${NAFNET_DIR}/config_i2i_nafnet_base.yaml"
+CONFIG_FILE="${NAFNET_DIR}/config_nafnet_base.yaml"
 
 CKPT_PATH="${NAFNET_CKPT_PATH:-${NAFNET_OUTPUT_DIR}/ckpt_latest.pth}"
 WSI_PARENT="${VSLITE_DIR}/input/IR"
-TEST_ROOT="${VSLITE_DIR}/results/nafnet_i2i/test/b13"
+TEST_ROOT="${VSLITE_DIR}/results/nafnet/test/b13"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 NUM_TEST="${NUM_TEST:-75000}"
 
@@ -46,7 +46,7 @@ python "${VSLITE_DIR}/util/wsi_tile_metrics.py" \
   --max_items "$NUM_TEST"
 
 python test_i2i_nafnet.py \
-  --config "${NAFNET_DIR}/config_i2i_nafnet_base.yaml" \
+  --config "${NAFNET_DIR}/config_nafnet_base.yaml" \
   --ckpt "$CKPT_PATH" \
   --split "test" \
   --num_samples 20 \
@@ -57,7 +57,7 @@ python test_i2i_nafnet.py \
   --out_dir "${TEST_ROOT}/patch_eval_test"
 
 python test_i2i_nafnet.py \
-  --config "${NAFNET_DIR}/config_i2i_nafnet_base.yaml" \
+  --config "${NAFNET_DIR}/config_nafnet_base.yaml" \
   --ckpt "$CKPT_PATH" \
   --split "train" \
   --num_samples 20 \

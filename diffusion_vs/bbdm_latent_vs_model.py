@@ -25,7 +25,9 @@ class ConvNeXtCondStage(nn.Module):
 
         opt = _Opt()
         opt.tcga_feature_ckpt = tcga_feature_ckpt
-        opt.vgg_normalize_input = True
+        opt.convnext_normalize_input = True
+        opt.convnext_resize_input = True
+        opt.vgg_normalize_input = True  # legacy alias for ConvNeXtFeatureExtractor
         opt.vgg_resize_input = True
         self.backbone = ConvNeXtFeatureExtractor(opt=opt, pretrained=False, freeze_weights=freeze)
         # Take last stage output channels and project to context_dim.

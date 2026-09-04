@@ -1,0 +1,4 @@
+# organ-specific val pool for Prostate (carved from train; not holdout)
+3839-7
+3945-1
+4332-2

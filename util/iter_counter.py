@@ -56,10 +56,11 @@ class IterationCounter():
         self.time_per_epoch = current_time - self.epoch_start_time
         print('End of epoch %d / %d \t Time Taken: %d sec' %
               (self.current_epoch, self.total_epochs, self.time_per_epoch))
-        if self.current_epoch % self.opt.save_epoch_freq == 0:
-            np.savetxt(self.iter_record_path, (self.current_epoch + 1, 0),
-                       delimiter=',', fmt='%d')
-            print('Saved current iteration count at %s.' % self.iter_record_path)
+        # Always persist the next-epoch cursor so continue_train / chained Slurm
+        # hops resume after the last finished epoch (not only on save_epoch_freq).
+        np.savetxt(self.iter_record_path, (self.current_epoch + 1, 0),
+                   delimiter=',', fmt='%d')
+        print('Saved current iteration count at %s.' % self.iter_record_path)
 
     def record_current_iter(self):
         np.savetxt(self.iter_record_path, (self.current_epoch, self.epoch_iter),

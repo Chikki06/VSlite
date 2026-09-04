@@ -217,7 +217,16 @@ class VSDataset(BaseDataset):
             default='',
             help='Optional path to newline-separated sample ids (val.txt). '
             'If not set, will use dataroot/val.txt if present. '
-            'Used only when phase==val. Samples in test.txt always take precedence.',
+            'Used only when phase==val. Samples in test.txt always take precedence. '
+            'A present-but-empty val.txt means no val split (do not hash-split).',
+        )
+        parser.add_argument(
+            '--train_list_path',
+            type=str,
+            default='',
+            help='Optional path to newline-separated sample ids for phase==train. '
+            'When set, training keeps only matching samples (exact id if line contains "-", '
+            'else prefix). Applied after test/val exclusions.',
         )
         parser.add_argument(
             '--test_includes_val',
@@ -355,10 +364,11 @@ class VSDataset(BaseDataset):
 
         # Validation split:
         # - If val.txt exists (or --val_list_path), use it to define *val by sample id/prefix*.
+        #   A present-but-empty file is an explicit empty val set (no hash-split).
         # - Otherwise fall back to deterministic hash subset of non-test samples.
         # This keeps:
         #   - train: all non-test and non-val samples
-        #   - val: val-listed samples (or hash-subset if no list)
+        #   - val: val-listed samples (or hash-subset if no list file)
         #   - test: test-listed samples
         phase = str(getattr(opt, "phase", "train") or "train").strip().lower()
         if phase in {"train", "val"}:
@@ -369,7 +379,8 @@ class VSDataset(BaseDataset):
                 val_list_path = candidate if os.path.isfile(candidate) else ""
 
             val_samples = None
-            if val_list_path != "" and os.path.isfile(val_list_path):
+            val_list_present = bool(val_list_path != "" and os.path.isfile(val_list_path))
+            if val_list_present:
                 v_exact = set()
                 v_prefixes = set()
                 with open(val_list_path, "r", encoding="utf-8") as f:
@@ -381,12 +392,9 @@ class VSDataset(BaseDataset):
                             v_exact.add(s)
                         else:
                             v_prefixes.add(s)
-                if len(v_exact) == 0 and len(v_prefixes) == 0:
-                    val_samples = None
-                else:
-                    val_samples = (v_exact, sorted(v_prefixes))
+                val_samples = (v_exact, sorted(v_prefixes))
 
-            if val_samples is not None:
+            if val_list_present:
                 def _sample_id_from_path(p: str) -> str:
                     base = os.path.splitext(os.path.basename(p))[0]
                     return base.split("_", 1)[0]
@@ -437,6 +445,45 @@ class VSDataset(BaseDataset):
                     r = _hash01(key)
                     bucket = "train" if r < train_cut else "val"
                     if bucket == "val":
+                        keep_idx.append(i)
+                IR = [IR[i] for i in keep_idx]
+                VIS = [VIS[i] for i in keep_idx]
+                HE = [HE[i] for i in keep_idx]
+
+        # Optional train allowlist (organ experiments, etc.). Applied last so it
+        # intersects with whatever remains after test/val exclusions.
+        phase = str(getattr(opt, "phase", "train") or "train").strip().lower()
+        train_list_path = str(getattr(opt, "train_list_path", "") or "").strip()
+        if phase == "train" and train_list_path != "" and os.path.isfile(train_list_path):
+            t_exact = set()
+            t_prefixes = set()
+            with open(train_list_path, "r", encoding="utf-8") as f:
+                for raw in f.read().splitlines():
+                    s = raw.strip()
+                    if not s or s.startswith("#"):
+                        continue
+                    if "-" in s:
+                        t_exact.add(s)
+                    else:
+                        t_prefixes.add(s)
+            if len(t_exact) > 0 or len(t_prefixes) > 0:
+                t_prefixes_sorted = sorted(t_prefixes)
+
+                def _sample_id_from_path(p: str) -> str:
+                    base = os.path.splitext(os.path.basename(p))[0]
+                    return base.split("_", 1)[0]
+
+                def _in_train(sid: str) -> bool:
+                    if sid in t_exact:
+                        return True
+                    for pfx in t_prefixes_sorted:
+                        if sid.startswith(pfx):
+                            return True
+                    return False
+
+                keep_idx = []
+                for i, p in enumerate(IR):
+                    if _in_train(_sample_id_from_path(p)):
                         keep_idx.append(i)
                 IR = [IR[i] for i in keep_idx]
                 VIS = [VIS[i] for i in keep_idx]
@@ -528,15 +575,27 @@ class VSDataset(BaseDataset):
             img_V_upsampled = cv2.resize(img_V, target_size, interpolation=cv2.INTER_CUBIC)
            # img_V = np.transpose(img_V, (2, 0, 1))
 
-            img_V = self.rgb_augmenter.forward(img_V_upsampled)/256  
-           # print(img_upsampled.shape)
+            no_aug = bool(getattr(self.opt, 'no_aug', False))
+            if not no_aug:
+                img_V = self.rgb_augmenter.forward(img_V_upsampled) / 256
+            else:
+                img_V = img_V_upsampled / 256.0
             H_name = self.list_HE[index % len(self.list_HE)]
             img_H = np.load(H_name, mmap_mode='r')
             img_H_upsampled = cv2.resize(img_H, target_size, interpolation=cv2.INTER_CUBIC)
-            img_upsampled, img_V, img_H= self.Allaug.forward(img_upsampled,img_V,img_H_upsampled)
-            img_H = img_H/256
+            if not no_aug:
+                img_upsampled, img_V, img_H = self.Allaug.forward(img_upsampled, img_V, img_H_upsampled)
+            else:
+                img_H = img_H_upsampled
+            img_H = img_H / 256
             img_H = np.clip(img_H, 0, 1)
-            img_H = (img_H - .5)/.5
+            img_H = (img_H - 0.5) / 0.5
+            if str(getattr(self.opt, 'he_color_space', 'srgb')).lower() == 'linear':
+                from util.color_space import apply_he_color_space
+                import torch as _torch
+                img_H = apply_he_color_space(_torch.from_numpy(img_H.transpose(2, 0, 1)), 'linear', minus1_1=True).numpy()
+                if img_H.ndim == 3 and img_H.shape[0] == 3:
+                    img_H = img_H.transpose(1, 2, 0)
 
 
 

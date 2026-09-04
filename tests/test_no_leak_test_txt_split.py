@@ -85,3 +85,50 @@ def test_test_txt_split_no_leakage_sample_10440_1():
         assert "10440-1" not in base_train_samples
         assert "99999-9" in base_train_samples
 
+
+def test_empty_val_txt_does_not_hash_split_train():
+    """A present-but-empty val.txt must not steal train patches via hash-split."""
+    with tempfile.TemporaryDirectory() as td:
+        patches = [
+            "aaa_y00000_x00000.npy",
+            "aaa_y00000_x01024.npy",
+            "bbb_y00000_x00000.npy",
+            "ccc_y00000_x00000.npy",
+        ]
+        for p in patches:
+            _write_patch(td, p)
+
+        with open(os.path.join(td, "test.txt"), "w", encoding="utf-8") as f:
+            f.write("ccc\n")
+        with open(os.path.join(td, "val.txt"), "w", encoding="utf-8") as f:
+            f.write("# moved to test\n")
+
+        class _Opt:
+            pass
+
+        opt = _Opt()
+        opt.dataroot = td
+        opt.max_dataset_size = 10**9
+        opt.input_nc = 10
+        opt.num_ir_channels = 10
+        opt.ir_channel_indices = ""
+        opt.image_size = 8
+        opt.test_list_path = os.path.join(td, "test.txt")
+        opt.val_list_path = os.path.join(td, "val.txt")
+
+        opt.phase = "train"
+        ds_train = VSDataset()
+        ds_train.initialize(opt)
+        train_samples = _samples_in_names(ds_train.list_IR)
+        assert train_samples == {"aaa", "bbb"}
+
+        opt.phase = "val"
+        ds_val = VSDataset()
+        ds_val.initialize(opt)
+        assert len(ds_val) == 0
+
+        opt.phase = "test"
+        ds_test = VSDataset()
+        ds_test.initialize(opt)
+        assert _samples_in_names(ds_test.list_IR) == {"ccc"}
+

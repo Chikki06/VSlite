@@ -36,6 +36,13 @@ class TrainOptions(BaseOptions):
             help='frequency of saving checkpoints at the end of epochs',
         )
         parser.add_argument(
+            '--save_epochs',
+            type=str,
+            default='',
+            help='Optional comma-separated epoch list to snapshot (plus the last '
+            'epoch). When set, overrides save_epoch_freq for numbered ckpts.',
+        )
+        parser.add_argument(
             '--no_html',
             action='store_true',
             help='do not save intermediate training results to [opt.checkpoints_dir]/[opt.name]/web/',
@@ -83,7 +90,46 @@ class TrainOptions(BaseOptions):
             help='# of iter to linearly decay learning rate to zero',
         )
         parser.add_argument(
-            '--evaluation_freq', type=int, default=5000, help='evaluation freq'
+            '--total_epochs',
+            type=int,
+            default=0,
+            help='If >0, overrides niter+niter_decay with this many epochs (constant LR for all).',
+        )
+        parser.add_argument(
+            '--image_size',
+            type=int,
+            default=1024,
+            help='Patch size for VS dataset resize (CISLNet).',
+        )
+        parser.add_argument(
+            '--he_color_space',
+            type=str,
+            default='srgb',
+            choices=['srgb', 'linear'],
+            help='H&E target color space.',
+        )
+        parser.add_argument(
+            '--weight_decay',
+            type=float,
+            default=0.0,
+            help='Adam weight decay.',
+        )
+        parser.add_argument(
+            '--no_aug',
+            action='store_true',
+            help='Disable VS geo/RGB augmentation.',
+        )
+        parser.add_argument(
+            '--early_stop_patience',
+            type=int,
+            default=0,
+            help='Stop after N epochs without val L1 improvement (0=off).',
+        )
+        parser.add_argument(
+            '--early_stop_min_delta',
+            type=float,
+            default=1e-4,
+            help='Min val L1 improvement for early stopping.',
         )
         parser.add_argument(
             '--optimizer', type=str, default='adam', help='name of optimizer to use'
@@ -167,10 +213,16 @@ class TrainOptions(BaseOptions):
             help='if specified, do *not* use discriminator feature matching loss',
         )
         parser.add_argument(
+            '--no_convnext_loss',
+            default=True,
+            type=util.str2bool,
+            help='if specified, do *not* use ConvNeXt perceptual loss',
+        )
+        parser.add_argument(
             '--no_vgg_loss',
             default=True,
             type=util.str2bool,
-            help='if specified, do *not* use VGG feature matching loss',
+            help='deprecated alias for --no_convnext_loss',
         )
         parser.add_argument(
             '--gan_loss',

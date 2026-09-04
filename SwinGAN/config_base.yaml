@@ -1,0 +1,50 @@
+## SwinGAN i2i baseline (no CBAM, no perceptual)
+
+## Data
+dataroot: ""                 # set via env SWINGAN_DATAROOT or CLI
+input_mode: "ir10"           # "ir10" or "irvis13"
+num_ir_channels: 10
+img_size: 512                # resize patches to this before Swin
+he_scale: "minus1_1"         # "minus1_1" or "0_1"
+split: "train"               # enable deterministic train/val/test split (uses dataroot/test.txt and dataroot/val.txt if present)
+split_seed: 1337
+split_fracs: [0.9, 0.05, 0.05]
+max_items: null
+
+## Output
+output_dir: "OUTPUT_PATH"
+
+## Pretraining (ImageNet Swin-T, 3ch — loads into backbone only; 10/13ch input uses learned 1x1 proj)
+pretrained_swin_ckpt: "/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN/pretrained_ckpt/swin_tiny_patch4_window7_224.pth"
+
+## Model (Swin-Unet)
+patch_size: 4
+embed_dim: 96
+depths: [2, 2, 6, 2]
+num_heads: [3, 6, 12, 24]
+window_size: 8
+mlp_ratio: 4.
+qkv_bias: True
+qk_scale: null
+drop_rate: 0.0
+drop_path_rate: 0.1
+ape: False
+patch_norm: True
+use_checkpoint: False
+
+## Train
+device: "cuda"
+gpu_id: "0"
+epochs_n: 50
+batch_size: 32
+print_freq: 100              # console log every ~this many images (like VS train.py); env SWINGAN_PRINT_FREQ
+lr_g: 0.0002
+lr_d: 0.0002
+train_num_workers: 16
+val_num_workers: 4
+gan_training: true
+discriminator_variant: "default"
+
+lambda_l1: 100.0
+lambda_gan: 1.0
+

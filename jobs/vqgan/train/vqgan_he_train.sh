@@ -22,7 +22,7 @@ export WANDB_MODE="disabled"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
-RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs"
+RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan"
 VQGAN_VARIANT="${VQGAN_VARIANT:-default}"
 if [[ "$VQGAN_VARIANT" == "default" ]]; then
   VQGAN_TAG="${VQGAN_TAG:-b}"
@@ -36,7 +36,7 @@ export UNIFIED_EVAL_MAX_BATCHES_VAL="${UNIFIED_EVAL_MAX_BATCHES_VAL:-50}"
 export UNIFIED_EVAL_MAX_BATCHES_TEST="${UNIFIED_EVAL_MAX_BATCHES_TEST:-50}"
 
 # B_eff=B_micro*K. Defaults 8×4=32 (stabler grads, ~2× VRAM vs 4×4). B_eff=16 + faster loop: VQGAN_ACCUM=2.
-python scripts/train_vqgan_vs.py \
+python scripts/train_vqgan.py \
   --name "$NAME" \
   --dataroot "$DATAROOT" \
   --results_dir "$RESULTS_DIR" \

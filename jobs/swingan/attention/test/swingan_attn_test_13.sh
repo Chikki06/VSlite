@@ -24,20 +24,22 @@ export SWINGAN_DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/d
 
 VSLITE_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 SWINGAN_RUN_TAG="a13"
-SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan_i2i/${SWINGAN_RUN_TAG}}"
-CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_i2i_attention.yaml"
+SWINGAN_OUTPUT_DIR="${SWINGAN_OUTPUT_DIR:-${VSLITE_DIR}/results/swingan/${SWINGAN_RUN_TAG}}"
+CONFIG_PATH="${VSLITE_DIR}/SwinGAN/config_attention.yaml"
 
 CKPT_PATH="${SWINGAN_CKPT_PATH:-${SWINGAN_OUTPUT_DIR}/ckpt_latest.pth}"
 # Default to 75k patches (override: NUM_TEST=0 for full split; NUM_TEST=100 for quick debug)
 NUM_TEST="${NUM_TEST:-75000}"
 FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-$NUM_TEST}"
 WSI_PARENT="${VSLITE_DIR}/input/IR"
-TEST_ROOT="${VSLITE_DIR}/results/swingan_i2i/test/${SWINGAN_RUN_TAG}"
+TEST_ROOT="${VSLITE_DIR}/results/swingan/test/${SWINGAN_RUN_TAG}"
 PRED_WSI_DIR="${TEST_ROOT}/wsi_pred"
 
 mkdir -p "$PRED_WSI_DIR"
 
 # WSI inference is opt-in (default SKIP_WSI=1, matching the baseline_13 pattern)
+export WSI_BATCH_SIZE="${WSI_BATCH_SIZE:-4}"
+
 SKIP_WSI="${SKIP_WSI:-1}"
 if [[ "$SKIP_WSI" != "1" ]]; then
   python infer_wsi_png.py \
@@ -45,7 +47,8 @@ if [[ "$SKIP_WSI" != "1" ]]; then
     --config "$CONFIG_PATH" \
     --model 1 \
     --parent_folder "$WSI_PARENT" \
-    --output_dir "$PRED_WSI_DIR"
+    --output_dir "$PRED_WSI_DIR" \
+    --tile_size "${WSI_TILE_SIZE:-512}"
 
   python "${VSLITE_DIR}/util/wsi_tile_metrics.py" \
     --pred_wsi_dir "$PRED_WSI_DIR" \

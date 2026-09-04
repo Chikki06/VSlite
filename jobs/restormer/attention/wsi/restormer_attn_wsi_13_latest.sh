@@ -16,14 +16,16 @@ source ~/.bashrc
 conda activate torchenv
 
 export PYTHONUNBUFFERED=1
+# 512px tiles: micro-batch 4 on A100 (override with WSI_BATCH_SIZE).
+export WSI_BATCH_SIZE="${WSI_BATCH_SIZE:-4}"
 
 VSLITE_ROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite"
 WSI_PARENT="${VSLITE_ROOT}/input/IR"
-RESULTS_DIR="${VSLITE_ROOT}/results/restormer_i2i"
+RESULTS_DIR="${VSLITE_ROOT}/results/restormer"
 RUN_TAG="a13"
 
 CKPT_PATH="${RESTORMER_CKPT_PATH:-${RESULTS_DIR}/${RUN_TAG}/ckpt_latest.pth}"
-CONFIG_PATH="${VSLITE_ROOT}/Restormer/config_i2i_restormer_perceptual.yaml"
+CONFIG_PATH="${VSLITE_ROOT}/Restormer/config_restormer_perceptual.yaml"
 
 OUT_DIR="${RESULTS_DIR}/test/${RUN_TAG}/wsi_pred"
 mkdir -p "$OUT_DIR"

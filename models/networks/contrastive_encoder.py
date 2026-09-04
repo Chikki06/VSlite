@@ -92,10 +92,10 @@ class ContrastiveEncoder(BaseNetwork):
         curr_val = getattr(self, '_nce_layers', None)
         if curr_val != value:
             self._nce_layers = value
-            try:
+            # ConvNeXt / vgg19 / pixel encoders return features directly — no hooks.
+            encoder = getattr(self, 'encoder', None)
+            if encoder is not None and hasattr(encoder, 'setup_hooks'):
                 self._setup_hooks()
-            except AttributeError as e:
-                print(e)
 
     def compute_perceptual_loss(self, x, y):
         feats_x, feats_y = self.features(x), self.features(y)

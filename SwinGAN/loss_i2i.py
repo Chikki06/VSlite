@@ -56,7 +56,9 @@ class ConvNeXtFeatureExtractor(nn.Module):
             dtype=torch.float32,
         )
         self.register_buffer("weights", default_weights / default_weights.sum())
-        self.start_idx = 0 if bool(getattr(opt, "vgg_loss_include_input", False)) else 1
+        self.start_idx = 0 if bool(
+            getattr(opt, "convnext_loss_include_input", getattr(opt, "vgg_loss_include_input", False))
+        ) else 1
 
     def forward(self, x, y):
         # Expected: x,y are 3ch images in [-1, 1] (same convention as the pix2pix codepath).

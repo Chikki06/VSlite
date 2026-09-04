@@ -42,20 +42,22 @@ def create_dataloader(opt):
     dataset = find_dataset_using_name(opt.dataset_mode)
     instance = dataset()
     instance.initialize(opt)
+    n = len(instance)
     print("dataset [%s] of size %d was created" %
-          (type(instance).__name__, len(instance)))
-    num_workers = int(opt.nThreads)
-    # Pinning speeds up CPU->GPU transfer when using CUDA.
-    pin_memory = bool(getattr(opt, 'gpu_ids', []))
-    # Keep workers alive across epochs to avoid fork/spawn overhead.
+          (type(instance).__name__, n))
+    # Empty split (e.g. present-but-empty val.txt): RandomSampler and
+    # persistent workers both fail on len==0.
+    empty = n == 0
+    num_workers = 0 if empty else int(opt.nThreads)
+    pin_memory = bool(getattr(opt, 'gpu_ids', [])) and not empty
     persistent_workers = num_workers > 0
     return torch.utils.data.DataLoader(
         instance,
         batch_size=opt.batch_size,
-        shuffle=not opt.serial_batches,
+        shuffle=(not empty) and (not opt.serial_batches),
         num_workers=num_workers,
         pin_memory=pin_memory,
         persistent_workers=persistent_workers,
         prefetch_factor=2 if num_workers > 0 else None,
-        drop_last=opt.isTrain,
+        drop_last=(not empty) and bool(opt.isTrain),
     )

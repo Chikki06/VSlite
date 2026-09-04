@@ -49,7 +49,7 @@ def _tensor_to_png_array(tensor: torch.Tensor, prefer_last_three: bool = False) 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", type=str, default="config_i2i_nafnet_base.yaml")
+    ap.add_argument("--config", type=str, default="config_nafnet_base.yaml")
     ap.add_argument("--ckpt", type=str, required=True)
     ap.add_argument("--split", type=str, default="test")
     ap.add_argument("--num_samples", type=int, default=20, help="Number of PNG triplets to save")
@@ -161,6 +161,8 @@ def main():
         "ssim_mean": res.ssim_mean,
         "ssim_std": res.ssim_std,
         "fid": res.fid,
+        "lpips_convnext_tcga_mean": res.lpips_convnext_tcga_mean,
+        "lpips_convnext_tcga_std": res.lpips_convnext_tcga_std,
         "ckpt": args.ckpt,
         "split": args.split,
     }
@@ -171,6 +173,11 @@ def main():
                 f"PSNR_{args.split}: {metrics['psnr_mean']:.3f}" if metrics["psnr_mean"] is not None else f"PSNR_{args.split}: nan",
                 f"SSIM_{args.split}: {metrics['ssim_mean']:.3f}" if metrics["ssim_mean"] is not None else f"SSIM_{args.split}: nan",
                 f"FID_{args.split}: {metrics['fid']:.3f}" if metrics["fid"] is not None else f"FID_{args.split}: nan",
+                (
+                    f"LPIPS_convnext_tcga_{args.split}: {metrics['lpips_convnext_tcga_mean']:.3f}"
+                    if metrics["lpips_convnext_tcga_mean"] is not None
+                    else f"LPIPS_convnext_tcga_{args.split}: nan"
+                ),
             ]
         )
     )

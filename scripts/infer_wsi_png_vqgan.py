@@ -31,6 +31,7 @@ import math
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import torch
@@ -50,6 +51,12 @@ from SwinGAN.infer_wsi_png import (  # noqa: E402
     read_vis_tile_to_device,
 )
 from diffusion_vs.vqgan_vs import import_third_party_vqgan  # noqa: E402
+from cislnet.wsi_local_padding import (  # noqa: E402
+    LocalPaddingConfig,
+    WSILocalPaddingState,
+    add_local_padding_cli_args,
+    resolve_local_padding_config,
+)
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -97,6 +104,7 @@ def infer_folder(
     *,
     tile_size: int,
     device: torch.device,
+    local_padding: Optional[LocalPaddingConfig] = None,
 ) -> np.ndarray:
     if data.vis is None or data.vis_shape_hwc is None:
         raise RuntimeError("VQGAN WSI inference requires VIS data.")
@@ -111,9 +119,22 @@ def infer_folder(
     I = list(range(0, rn * tile_size + 1, tile_size))
     J = list(range(0, cn * tile_size + 1, tile_size))
 
+    lp_cfg = local_padding or LocalPaddingConfig(enabled=False)
+    lp_state = WSILocalPaddingState(lp_cfg) if lp_cfg.enabled else None
+    n_ii = len(I) - 1
+    n_jj = len(J) - 1
+    if lp_cfg.enabled:
+        print(
+            f"[WSI] VQGAN local_padding: padding_size={lp_cfg.padding_size} "
+            f"outer={lp_cfg.outer_padding}",
+            flush=True,
+        )
+
     with torch.no_grad():
-        for ii in range(len(I) - 1):
-            for jj in range(len(J) - 1):
+        for ii in range(n_ii):
+            if lp_state is not None:
+                lp_state.on_new_row()
+            for jj in range(n_jj):
                 vis_patch = read_vis_tile_to_device(
                     data,
                     y0_tgt=I[ii],
@@ -123,6 +144,8 @@ def infer_folder(
                     tile_size=tile_size,
                     device=device,
                 )
+                if lp_state is not None:
+                    vis_patch = lp_state.apply_to_input(vis_patch, ii=ii, jj=jj, vis_offset=0)
                 # VQGAN expects H&E targets in [-1, 1] (matches training).
                 x_he = vis_patch.clamp(0.0, 1.0) * 2.0 - 1.0
 
@@ -130,6 +153,14 @@ def infer_folder(
                 y_np = (decoded[0].clamp(-1.0, 1.0).cpu().numpy() * 0.5) + 0.5
                 y_u8 = np.clip(y_np * 255.0, 0, 255).astype(np.uint8)
                 out[I[ii] : I[ii + 1], J[jj] : J[jj + 1], :] = np.transpose(y_u8, (1, 2, 0))
+                if lp_state is not None:
+                    lp_state.update_after_tile(
+                        x_input=vis_patch,
+                        y_output=decoded[0],
+                        vis_offset=0,
+                        is_last_col=(jj == n_jj - 1),
+                        is_last_row=(ii == n_ii - 1),
+                    )
 
                 del vis_patch, x_he, decoded, y_np, y_u8
                 if torch.cuda.is_available():
@@ -179,11 +210,17 @@ def _parse_args() -> argparse.Namespace:
         help="Tile size for VQGAN inference (defaults to --image_size).",
     )
     p.add_argument("--gpu", type=int, default=0)
+    add_local_padding_cli_args(p)
     return p.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
+    lp_cfg = resolve_local_padding_config(
+        local_padding=bool(getattr(args, "local_padding", False)),
+        local_padding_size=int(getattr(args, "local_padding_size", 1)),
+        local_padding_outer=str(getattr(args, "local_padding_outer", "replicate")),
+    )
 
     if torch.cuda.is_available():
         torch.cuda.set_device(int(args.gpu))
@@ -236,7 +273,13 @@ def main() -> None:
         print(f"Processing {folder_name} ...", flush=True)
         loader = VSLiteFolderLoader(parent, folder_name, model_type=1)
         data = loader.load()
-        pred = infer_folder(vqgan, data, tile_size=tile_size, device=device)
+        pred = infer_folder(
+            vqgan,
+            data,
+            tile_size=tile_size,
+            device=device,
+            local_padding=lp_cfg,
+        )
 
         out_path = os.path.join(output_dir, f"{folder_name}_vqgan.png")
         Image.fromarray(pred).save(out_path)

@@ -98,7 +98,9 @@ class VSLiteI2IDataset(Dataset):
         img_size: Optional[int] = 256,
         ir_clip: Tuple[float, float] = (0.0, 5.0),
         ir_scale: str = "0_1",  # "0_1" or "none"
-        he_scale: str = "minus1_1",  # "minus1_1" or "0_1"
+        he_scale: str = "minus1_1",
+        he_color_space: str = "srgb",
+        augment: bool = True,
         max_items: Optional[int] = None,
         split: Optional[str] = None,  # None|train|val|test
         split_seed: int = 1337,
@@ -115,6 +117,8 @@ class VSLiteI2IDataset(Dataset):
         self.ir_clip = (float(ir_clip[0]), float(ir_clip[1]))
         self.ir_scale = ir_scale
         self.he_scale = he_scale
+        self.he_color_space = str(he_color_space).lower()
+        self.augment = bool(augment)
 
         ir_dir = os.path.join(dataroot, "ir")
         he_dir = os.path.join(dataroot, "he")
@@ -298,6 +302,10 @@ class VSLiteI2IDataset(Dataset):
             raise ValueError(f"HE file {name} expected 3 channels, got {he_t.shape[0]}")
         he_t = self._resize_chw(he_t)
         y = self._scale_he(he_t)
+        if self.he_color_space == "linear":
+            from util.color_space import apply_he_color_space
+
+            y = apply_he_color_space(y, "linear", minus1_1=(self.he_scale == "minus1_1"))
 
         return {"x": x, "y": y, "name": name}
 

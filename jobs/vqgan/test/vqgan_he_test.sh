@@ -21,7 +21,7 @@ export VSLITE_CONVNEXT_FID_CKPT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/t
 export VSLITE_INFER_BS="${VSLITE_INFER_BS:-16}"
 
 DATAROOT="/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen"
-RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs"
+RESULTS_DIR="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan"
 VQGAN_VARIANT="${VQGAN_VARIANT:-default}"
 if [[ "$VQGAN_VARIANT" == "default" ]]; then
   VQGAN_TAG="${VQGAN_TAG:-b}"
@@ -33,7 +33,7 @@ CKPT="${VQGAN_CKPT:-vqgan_epoch_049.pt}"
 NUM_TEST="${NUM_TEST:-75000}"
 FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-75000}"
 
-python scripts/test_vqgan_vs.py \
+python scripts/test_vqgan.py \
   --name "$NAME" \
   --dataroot "$DATAROOT" \
   --results_dir "$RESULTS_DIR" \
@@ -49,7 +49,7 @@ python scripts/test_vqgan_vs.py \
   --fid_batch_size "${VSLITE_FID_BATCH_SIZE:-16}" \
   --gpu 0
 
-python scripts/test_vqgan_vs.py \
+python scripts/test_vqgan.py \
   --name "$NAME" \
   --dataroot "$DATAROOT" \
   --results_dir "$RESULTS_DIR" \

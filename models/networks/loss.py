@@ -101,16 +101,21 @@ class ConvNeXtLoss(nn.Module):
     def __init__(self, opt):
         super().__init__()
         self.opt = opt
-        fw = not vars(opt).get('unfrozen_vgg', False)
-        pt = vars(opt).get('pretrained_vgg', True)
-        self.vgg = ConvNeXtFeatureExtractor(opt, pretrained=pt, freeze_weights=fw).cuda()
+        fw = not vars(opt).get('unfrozen_convnext', vars(opt).get('unfrozen_vgg', False))
+        pt = vars(opt).get('pretrained_convnext', vars(opt).get('pretrained_vgg', True))
+        self.backbone = ConvNeXtFeatureExtractor(opt, pretrained=pt, freeze_weights=fw).cuda()
+        self.vgg = self.backbone  # legacy alias
         self.criterion = nn.L1Loss()
         if self.opt.use_crn_lambdas:
             self.weights = self.CRN_WEIGHTS
         else:
             self.weights = self.DEFAULT_WEIGHTS
         self.weights = self.weights / np.sum(self.weights)
-        self.start_idx = 0 if self.opt.vgg_loss_include_input else 1
+        self.start_idx = 0 if getattr(
+            self.opt,
+            "convnext_loss_include_input",
+            getattr(self.opt, "vgg_loss_include_input", False),
+        ) else 1
 
     def forward(self, x, y):
         x_vgg, y_vgg = self.vgg(x), self.vgg(y)
@@ -138,9 +143,7 @@ class PerceptualLoss(nn.Module):
         return self.model(*x)
 
     def _get_model(self, opt):
-        if opt.perceptual_encoder == 'vgg':
+        enc = str(getattr(opt, 'perceptual_encoder', 'convnext')).lower()
+        if enc in ('vgg', 'convnext'):
             return ConvNeXtLoss(opt)
-        else:
-            raise ValueError(
-                f'Unrecognized perceptual encoder: {opt.perceptual_encoder}'
-            )
+        raise ValueError(f'Unrecognized perceptual encoder: {opt.perceptual_encoder}')

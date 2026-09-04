@@ -31,3 +31,4 @@ ipdb
 pycuda
 onnxscript
 onnx
+torchao>=0.17

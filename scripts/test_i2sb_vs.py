@@ -152,6 +152,8 @@ def main() -> None:
         "ssim_mean": res.ssim_mean,
         "ssim_std": res.ssim_std,
         "fid": res.fid,
+        "lpips_convnext_tcga_mean": res.lpips_convnext_tcga_mean,
+        "lpips_convnext_tcga_std": res.lpips_convnext_tcga_std,
         "split": str(args.split),
         "name": str(args.name),
         "nfe": int(args.nfe),
@@ -174,6 +176,11 @@ def main() -> None:
                 f"PSNR_test: {metrics['psnr_mean']:.3f}" if metrics["psnr_mean"] is not None else "PSNR_test: nan",
                 f"SSIM_test: {metrics['ssim_mean']:.3f}" if metrics["ssim_mean"] is not None else "SSIM_test: nan",
                 f"FID_test: {metrics['fid']:.3f}" if metrics["fid"] is not None else "FID_test: nan",
+                (
+                    f"LPIPS_convnext_tcga_test: {metrics['lpips_convnext_tcga_mean']:.3f}"
+                    if metrics["lpips_convnext_tcga_mean"] is not None
+                    else "LPIPS_convnext_tcga_test: nan"
+                ),
             ]
         )
     )

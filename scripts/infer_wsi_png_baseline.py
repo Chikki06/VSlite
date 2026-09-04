@@ -21,8 +21,17 @@ if str(_REPO_ROOT) not in sys.path:
 
 from options.test_options import TestOptions  # noqa: E402
 from models import create_model  # noqa: E402
+from cislnet.wsi_local_padding import (  # noqa: E402
+    LocalPaddingConfig,
+    WSILocalPaddingState,
+    add_local_padding_cli_args,
+    effective_wsi_batch_size,
+    resolve_local_padding_config,
+)
 
 Image.MAX_IMAGE_PIXELS = None
+
+INT32_INDEX_MAX = 2_147_483_647
 
 
 @dataclass
@@ -202,6 +211,19 @@ def _parse_args() -> argparse.Namespace:
         default=1024,
         help="Tile size for generator inference (pixels); match `third_party/main.py` (1024) and VS_dataset image_size",
     )
+    p.add_argument(
+        "--batch_size",
+        type=int,
+        default=None,
+        help="Optional inference micro-batch size in tiles; overrides WSI_BATCH_SIZE env when provided.",
+    )
+    p.add_argument(
+        "--optim",
+        action="store_true",
+        default=False,
+        help="Move VIS tile interpolation onto GPU and pack batches into preallocated tensors.",
+    )
+    add_local_padding_cli_args(p)
     return p.parse_args()
 
 
@@ -483,7 +505,10 @@ def infer_folder(
     num_ir_channels: int,
     ir_channel_indices: str,
     tile_size: int,
+    batch_size: int,
+    optim: bool,
     device: torch.device,
+    local_padding: Optional[LocalPaddingConfig] = None,
 ) -> np.ndarray:
     ir_h, ir_w, ir_c = data.ir_shape_hwc
     ir_idx, n_ir = _select_ir_indices(int(ir_c), num_ir_channels=int(num_ir_channels), ir_channel_indices=str(ir_channel_indices or ""))
@@ -519,29 +544,44 @@ def infer_folder(
     I = list(range(0, rn * tile_size + 1, tile_size))
     J = list(range(0, cn * tile_size + 1, tile_size))
 
-    # Baseline model expects NCHW, and returns fake image in [-1,1].
-    y_dummy = torch.zeros((1, 3, tile_size, tile_size), device=device, dtype=torch.float32)
-    with torch.no_grad():
-        for ii in range(len(I) - 1):
-            for jj in range(len(J) - 1):
-                dh = int(I[ii + 1] - I[ii])
-                dw = int(J[jj + 1] - J[jj])
-                # IR: read at 2 µm/px, bicubic upsample to tile_size (same as third_party/main.py).
-                ir_patch = read_ir_tile_to_device(
-                    data,
-                    y0_tgt=I[ii],
-                    y1_tgt=I[ii + 1],
-                    x0_tgt=J[jj],
-                    x1_tgt=J[jj + 1],
-                    tile_size=tile_size,
-                    device=device,
-                )
-                ir_patch = ir_patch[:, ir_idx, :, :]
+    tile_coords = [(ii, jj, int(I[ii + 1] - I[ii]), int(J[jj + 1] - J[jj])) for ii in range(len(I) - 1) for jj in range(len(J) - 1)]
 
-                if mode == "ir_vis":
-                    assert vis is not None
-                    if abs(vis_scale - 1.0) < 1e-6:
-                        vis_patch = read_vis_tile_to_device(
+    # Conservative cap to avoid the 32-bit index math crash in PyTorch internals.
+    max_bs_int32 = max(1, INT32_INDEX_MAX // (64 * tile_size * tile_size))
+    requested_bs = max(1, int(batch_size))
+    bs = min(requested_bs, max_bs_int32)
+    if bs != requested_bs:
+        print(
+            f"[WSI] Requested batch_size={requested_bs} exceeds int32-safe cap={max_bs_int32} at tile_size={tile_size}; using {bs}."
+        )
+
+    vis_offset = len(ir_idx)
+    lp_cfg = local_padding or LocalPaddingConfig(enabled=False)
+    bs = effective_wsi_batch_size(bs, lp_cfg)
+    lp_state = WSILocalPaddingState(lp_cfg) if lp_cfg.enabled else None
+    if lp_cfg.enabled:
+        print(
+            f"[WSI] local_padding enabled: padding_size={lp_cfg.padding_size} "
+            f"outer={lp_cfg.outer_padding}",
+            flush=True,
+        )
+
+    with torch.no_grad():
+        for b0 in range(0, len(tile_coords), bs):
+            batch = tile_coords[b0 : b0 + bs]
+            sub_bs = len(batch)
+
+            while sub_bs > 0:
+                sub_batch = batch[:sub_bs]
+                x_channels = vis_offset + (3 if mode == "ir_vis" else 0)
+                x_batch = torch.empty((sub_bs, x_channels, tile_size, tile_size), device=device, dtype=torch.float32)
+                y_dummy = torch.zeros((sub_bs, 3, tile_size, tile_size), device=device, dtype=torch.float32)
+
+                try:
+                    for slot, (ii, jj, _, _) in enumerate(sub_batch):
+                        if lp_state is not None and jj == 0:
+                            lp_state.on_new_row()
+                        ir_patch = read_ir_tile_to_device(
                             data,
                             y0_tgt=I[ii],
                             y1_tgt=I[ii + 1],
@@ -550,45 +590,97 @@ def infer_folder(
                             tile_size=tile_size,
                             device=device,
                         )
-                    else:
-                        vis_chw = _read_vis_patch_to_chw(
-                            vis,
-                            y0=int(I[ii]),
-                            y1=int(I[ii + 1]),
-                            x0=int(J[jj]),
-                            x1=int(J[jj + 1]),
-                            expect_channels=3,
-                            native_hw=native_vis_hw,
-                            vis_scale=vis_scale,
-                        )
-                        v_pad_rows = max(0, tile_size - vis_chw.shape[1])
-                        v_pad_cols = max(0, tile_size - vis_chw.shape[2])
-                        vis_patch = vis_chw.unsqueeze(0).to(
-                            device=device, dtype=torch.float32, non_blocking=True
-                        )
-                        if v_pad_rows or v_pad_cols:
-                            vis_patch = F.pad(
-                                vis_patch,
-                                (0, v_pad_cols, 0, v_pad_rows),
-                                mode="constant",
-                                value=0.0,
+                        x_batch[slot, :vis_offset, :, :] = ir_patch[0, ir_idx, :, :]
+
+                        if mode == "ir_vis":
+                            assert vis is not None
+                            if optim:
+                                vis_chw = _read_vis_patch_to_chw(
+                                    vis,
+                                    y0=int(I[ii]),
+                                    y1=int(I[ii + 1]),
+                                    x0=int(J[jj]),
+                                    x1=int(J[jj + 1]),
+                                    expect_channels=3,
+                                    native_hw=native_vis_hw,
+                                    vis_scale=vis_scale,
+                                )
+                                vis_patch = vis_chw.unsqueeze(0).to(device=device, dtype=torch.float32, non_blocking=True)
+                                if vis_patch.shape[2] != tile_size or vis_patch.shape[3] != tile_size:
+                                    vis_patch = F.interpolate(
+                                        vis_patch,
+                                        size=(tile_size, tile_size),
+                                        mode="bilinear",
+                                        align_corners=False,
+                                    )
+                            else:
+                                if abs(vis_scale - 1.0) < 1e-6:
+                                    vis_patch = read_vis_tile_to_device(
+                                        data,
+                                        y0_tgt=I[ii],
+                                        y1_tgt=I[ii + 1],
+                                        x0_tgt=J[jj],
+                                        x1_tgt=J[jj + 1],
+                                        tile_size=tile_size,
+                                        device=device,
+                                    )
+                                else:
+                                    vis_chw = _read_vis_patch_to_chw(
+                                        vis,
+                                        y0=int(I[ii]),
+                                        y1=int(I[ii + 1]),
+                                        x0=int(J[jj]),
+                                        x1=int(J[jj + 1]),
+                                        expect_channels=3,
+                                        native_hw=native_vis_hw,
+                                        vis_scale=vis_scale,
+                                    )
+                                    vis_patch = vis_chw.unsqueeze(0).to(device=device, dtype=torch.float32, non_blocking=True)
+
+                            x_batch[slot, vis_offset:, :, :] = vis_patch[0]
+
+                        if lp_state is not None:
+                            x_batch[slot] = lp_state.apply_to_input(
+                                x_batch[slot], ii=ii, jj=jj, vis_offset=vis_offset
                             )
-                    x_patch = torch.cat([ir_patch, vis_patch], dim=1)
-                else:
-                    vis_patch = None
-                    x_patch = ir_patch
 
-                fake = model({"input": x_patch, "target": y_dummy}, mode="inference")
-                y_u8 = _fake_to_tile_u8(fake, dh=dh, dw=dw)
-                out[I[ii] : I[ii + 1], J[jj] : J[jj + 1], :] = y_u8
+                    fake_batch = model({"input": x_batch, "target": y_dummy}, mode="inference")
 
-                # Keep host memory stable during long WSI runs.
-                del ir_patch, x_patch, fake, y_u8
-                if vis_patch is not None:
-                    del vis_patch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            gc.collect()
+                except RuntimeError as e:
+                    msg = str(e)
+                    if "32-bit index math" in msg and sub_bs > 1:
+                        new_sub_bs = max(1, sub_bs // 2)
+                        print(f"[WSI] 32-bit index math hit at sub_batch={sub_bs}; retrying with {new_sub_bs}.")
+                        del x_batch, y_dummy
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        gc.collect()
+                        sub_bs = new_sub_bs
+                        continue
+                    raise
+
+                if torch.is_tensor(fake_batch) and fake_batch.dim() == 3:
+                    fake_batch = fake_batch.unsqueeze(0)
+
+                for kk, (ii, jj, dh, dw) in enumerate(sub_batch):
+                    fake = fake_batch[kk] if torch.is_tensor(fake_batch) and fake_batch.dim() == 4 else fake_batch
+                    y_u8 = _fake_to_tile_u8(fake, dh=dh, dw=dw)
+                    out[I[ii] : I[ii + 1], J[jj] : J[jj + 1], :] = y_u8
+                    if lp_state is not None:
+                        n_ii = len(I) - 1
+                        n_jj = len(J) - 1
+                        y_chw = fake if fake.dim() == 3 else fake
+                        lp_state.update_after_tile(
+                            x_input=x_batch[kk],
+                            y_output=y_chw,
+                            vis_offset=vis_offset,
+                            is_last_col=(jj == n_jj - 1),
+                            is_last_row=(ii == n_ii - 1),
+                        )
+
+                del x_batch, y_dummy, fake_batch
+                batch = batch[sub_bs:]
+                sub_bs = len(batch)
 
     out = out[:r, :c, :]
     return out
@@ -596,6 +688,11 @@ def infer_folder(
 
 def main() -> None:
     args = _parse_args()
+    lp_cfg = resolve_local_padding_config(
+        local_padding=bool(getattr(args, "local_padding", False)),
+        local_padding_size=int(getattr(args, "local_padding_size", 1)),
+        local_padding_outer=str(getattr(args, "local_padding_outer", "replicate")),
+    )
 
     # Construct a TestOptions parse that loads the model + opt defaults from the checkpoint folder.
     # This mirrors `scripts/vs_infer_and_metrics.py` behavior, but without the patch dataset.
@@ -638,7 +735,15 @@ def main() -> None:
     opt.no_flip = True
     opt.no_flip_vert = True
     opt.no_rotate = True
-    opt.batch_size = 1
+    try:
+        env_bs = int(os.environ.get("WSI_BATCH_SIZE", "1"))
+    except Exception:
+        env_bs = 1
+    cli_bs = args.batch_size
+    opt.batch_size = int(cli_bs) if cli_bs is not None else int(env_bs)
+    if opt.batch_size <= 0:
+        raise ValueError(f"Invalid batch size: {opt.batch_size}. Must be >= 1.")
+    print(f"[WSI] Using batch_size={opt.batch_size} (cli={cli_bs}, env={env_bs})")
 
     model = create_model(opt)
     model.eval()
@@ -678,7 +783,10 @@ def main() -> None:
             num_ir_channels=int(args.num_ir_channels),
             ir_channel_indices=str(args.ir_channel_indices or ""),
             tile_size=int(args.tile_size),
+            batch_size=int(opt.batch_size),
+            optim=bool(args.optim),
             device=device,
+            local_padding=lp_cfg,
         )
 
         suffix = "13ch" if int(args.input_nc) > int(args.num_ir_channels) else f"{int(args.input_nc)}ch"

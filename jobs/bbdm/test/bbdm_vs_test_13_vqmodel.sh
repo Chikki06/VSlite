@@ -19,12 +19,12 @@ export PYTHONUNBUFFERED=1
 export WANDB_MODE="disabled"
 
 CONFIG="/projects/illinois/eng/bioe/rxb/akshat/VSlite/diffusion_vs/configs/bbdm_vs/lbbdm_vs13_vqmodel.yaml"
-RESULT_PATH="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/bbdm_vs"
+RESULT_PATH="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/bbdm"
 RUN_NAME="bbdmA_13"
 NUM_TEST="${NUM_TEST:-75000}"
 FID_MAX_ITEMS="${VSLITE_FID_MAX_ITEMS:-75000}"
 
-CKPT="${BBDM_CKPT:-/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/bbdm_vs/LBBDM-vslite-vqmodel-13/checkpoint/latest.ckpt}"
+CKPT="${BBDM_CKPT:-/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/bbdm/LBBDM-vslite-vqmodel-13/checkpoint/latest.ckpt}"
 
 python scripts/test_bbdm_vs.py \
   --config "$CONFIG" \

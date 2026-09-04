@@ -1,0 +1,221 @@
+{
+  "base_epochs": 30,
+  "batch_size": 10,
+  "n_all": 53164,
+  "target_samples": 1594800,
+  "test_eq_epochs": [
+    5,
+    10,
+    15,
+    20,
+    25,
+    30
+  ],
+  "runs": {
+    "c13_oa_all": {
+      "train_patches": 53164,
+      "samples_per_epoch": 53160,
+      "local_epochs": 30,
+      "save_epochs": [
+        5,
+        10,
+        15,
+        20,
+        25,
+        30
+      ],
+      "target_samples": 1594800,
+      "scheduled_samples": 1594800,
+      "ckpt_equiv": {
+        "5": {
+          "local_epoch": 5,
+          "samples": 265800
+        },
+        "10": {
+          "local_epoch": 10,
+          "samples": 531600
+        },
+        "15": {
+          "local_epoch": 15,
+          "samples": 797400
+        },
+        "20": {
+          "local_epoch": 20,
+          "samples": 1063200
+        },
+        "25": {
+          "local_epoch": 25,
+          "samples": 1329000
+        },
+        "30": {
+          "local_epoch": 30,
+          "samples": 1594800
+        }
+      }
+    },
+    "c13_oa_top3": {
+      "train_patches": 26944,
+      "samples_per_epoch": 26940,
+      "local_epochs": 59,
+      "save_epochs": [
+        10,
+        20,
+        30,
+        39,
+        49,
+        59
+      ],
+      "target_samples": 1594800,
+      "scheduled_samples": 1589460,
+      "ckpt_equiv": {
+        "5": {
+          "local_epoch": 10,
+          "samples": 269400
+        },
+        "10": {
+          "local_epoch": 20,
+          "samples": 538800
+        },
+        "15": {
+          "local_epoch": 30,
+          "samples": 808200
+        },
+        "20": {
+          "local_epoch": 39,
+          "samples": 1050660
+        },
+        "25": {
+          "local_epoch": 49,
+          "samples": 1320060
+        },
+        "30": {
+          "local_epoch": 59,
+          "samples": 1589460
+        }
+      }
+    },
+    "c13_os_prostate": {
+      "train_patches": 17183,
+      "samples_per_epoch": 17180,
+      "local_epochs": 93,
+      "save_epochs": [
+        15,
+        31,
+        46,
+        62,
+        77,
+        93
+      ],
+      "target_samples": 1594800,
+      "scheduled_samples": 1597740,
+      "ckpt_equiv": {
+        "5": {
+          "local_epoch": 15,
+          "samples": 257700
+        },
+        "10": {
+          "local_epoch": 31,
+          "samples": 532580
+        },
+        "15": {
+          "local_epoch": 46,
+          "samples": 790280
+        },
+        "20": {
+          "local_epoch": 62,
+          "samples": 1065160
+        },
+        "25": {
+          "local_epoch": 77,
+          "samples": 1322860
+        },
+        "30": {
+          "local_epoch": 93,
+          "samples": 1597740
+        }
+      }
+    },
+    "c13_os_kidney": {
+      "train_patches": 5653,
+      "samples_per_epoch": 5650,
+      "local_epochs": 282,
+      "save_epochs": [
+        47,
+        94,
+        141,
+        188,
+        235,
+        282
+      ],
+      "target_samples": 1594800,
+      "scheduled_samples": 1593300,
+      "ckpt_equiv": {
+        "5": {
+          "local_epoch": 47,
+          "samples": 265550
+        },
+        "10": {
+          "local_epoch": 94,
+          "samples": 531100
+        },
+        "15": {
+          "local_epoch": 141,
+          "samples": 796650
+        },
+        "20": {
+          "local_epoch": 188,
+          "samples": 1062200
+        },
+        "25": {
+          "local_epoch": 235,
+          "samples": 1327750
+        },
+        "30": {
+          "local_epoch": 282,
+          "samples": 1593300
+        }
+      }
+    },
+    "c13_os_uterus": {
+      "train_patches": 3840,
+      "samples_per_epoch": 3840,
+      "local_epochs": 415,
+      "save_epochs": [
+        69,
+        138,
+        208,
+        277,
+        346,
+        415
+      ],
+      "target_samples": 1594800,
+      "scheduled_samples": 1593600,
+      "ckpt_equiv": {
+        "5": {
+          "local_epoch": 69,
+          "samples": 264960
+        },
+        "10": {
+          "local_epoch": 138,
+          "samples": 529920
+        },
+        "15": {
+          "local_epoch": 208,
+          "samples": 798720
+        },
+        "20": {
+          "local_epoch": 277,
+          "samples": 1063680
+        },
+        "25": {
+          "local_epoch": 346,
+          "samples": 1328640
+        },
+        "30": {
+          "local_epoch": 415,
+          "samples": 1593600
+        }
+      }
+    }
+  }
+}

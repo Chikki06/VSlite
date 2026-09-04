@@ -21,7 +21,7 @@ export WANDB_MODE="disabled"
 CONFIG="/projects/illinois/eng/bioe/rxb/akshat/VSlite/diffusion_vs/configs/bbdm_vs/lbbdm_vs13_vqgan_pytorch_convnext.yaml"
 RESULT_PATH="/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/unified/bbdm_vs"
 
-python scripts/train_bbdm_vs.py \
+python scripts/train_bbdm.py \
   --config "$CONFIG" \
   --result_path "$RESULT_PATH" \
   --gpu_ids 0

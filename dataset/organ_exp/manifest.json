@@ -1,0 +1,205 @@
+{
+  "canonical_excluded_samples": [
+    "10442-1",
+    "10442-2",
+    "10445-2",
+    "10445-3",
+    "10445-4",
+    "3840-1",
+    "3840-2",
+    "3840-3",
+    "3840-4",
+    "3840-5",
+    "3840-6",
+    "4466-1",
+    "4466-2",
+    "4520-1",
+    "4520-2",
+    "4520-3",
+    "4520-4"
+  ],
+  "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+  "db": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/tissue_images.db",
+  "frozen_patches": 66976,
+  "frozen_samples": 194,
+  "holdouts": {
+    "Kidney": {
+      "eligible_patches": 6956,
+      "holdout_frac": 0.1160149511213341,
+      "holdout_patches": 807,
+      "holdout_samples": [
+        "3974-3",
+        "5387-3"
+      ],
+      "pool_patches": 6149,
+      "pool_samples": 16,
+      "test_train_ratio": 0.13124085217108472
+    },
+    "Prostate": {
+      "eligible_patches": 20507,
+      "holdout_frac": 0.11600916760130688,
+      "holdout_patches": 2379,
+      "holdout_samples": [
+        "Prost2a",
+        "3932-3",
+        "3945-3",
+        "Prost4a",
+        "4249-2",
+        "Prost3a",
+        "3899-8"
+      ],
+      "pool_patches": 18128,
+      "pool_samples": 49,
+      "test_train_ratio": 0.13123345101500442
+    },
+    "Uterus": {
+      "eligible_patches": 4638,
+      "holdout_frac": 0.1159982751185856,
+      "holdout_patches": 538,
+      "holdout_samples": [
+        "10465",
+        "uterus"
+      ],
+      "pool_patches": 4100,
+      "pool_samples": 13,
+      "test_train_ratio": 0.13121951219512196
+    }
+  },
+  "organ_patch_counts": {
+    "Bladder, rectum, perineum; extenteration": 357,
+    "Breast": 2623,
+    "Cervix": 253,
+    "Colon": 1323,
+    "Colon, sigmoid and rectum": 503,
+    "Esophagus": 1036,
+    "Fallopian tube": 127,
+    "Ileum": 421,
+    "Kidney": 8450,
+    "Leiomyoma": 495,
+    "Liver": 1623,
+    "Lung": 996,
+    "Lymph node": 271,
+    "Mesentery": 987,
+    "Ovary": 2899,
+    "Pancreas": 2163,
+    "Pelvic mass": 941,
+    "Penis": 1502,
+    "Prostate": 24686,
+    "Seminal vesicle": 308,
+    "Soft tissue": 965,
+    "Spleen": 566,
+    "Stomach": 1500,
+    "Thyroid": 1506,
+    "Tongue": 1153,
+    "Tonsil": 1649,
+    "UNKNOWN": 278,
+    "Ureter": 482,
+    "Urethra": 160,
+    "Urinary bladder": 988,
+    "Uterus": 4638,
+    "Uterus and cervix": 1127
+  },
+  "organ_sample_counts": {
+    "Bladder, rectum, perineum; extenteration": 1,
+    "Breast": 9,
+    "Cervix": 1,
+    "Colon": 3,
+    "Colon, sigmoid and rectum": 2,
+    "Esophagus": 3,
+    "Fallopian tube": 1,
+    "Ileum": 2,
+    "Kidney": 21,
+    "Leiomyoma": 2,
+    "Liver": 5,
+    "Lung": 5,
+    "Lymph node": 2,
+    "Mesentery": 3,
+    "Ovary": 8,
+    "Pancreas": 5,
+    "Pelvic mass": 2,
+    "Penis": 4,
+    "Prostate": 66,
+    "Seminal vesicle": 1,
+    "Soft tissue": 3,
+    "Spleen": 1,
+    "Stomach": 5,
+    "Thyroid": 5,
+    "Tongue": 4,
+    "Tonsil": 4,
+    "UNKNOWN": 2,
+    "Ureter": 1,
+    "Urethra": 1,
+    "Urinary bladder": 4,
+    "Uterus": 15,
+    "Uterus and cervix": 3
+  },
+  "seed": 42,
+  "top3_organs": [
+    "Prostate",
+    "Kidney",
+    "Uterus"
+  ],
+  "train_oa_all": {
+    "train_patches": 53164,
+    "train_samples": 157,
+    "val_patches": 3159,
+    "val_sample_count": 9,
+    "val_samples": [
+      "4046-2",
+      "4237-2",
+      "4039-2",
+      "SV1b",
+      "3945-1",
+      "4039-4",
+      "3839-7",
+      "6220-2",
+      "10440-1"
+    ]
+  },
+  "train_oa_top3": {
+    "train_patches": 26944,
+    "train_samples": 73,
+    "val_patches": 1433,
+    "val_sample_count": 5,
+    "val_samples": [
+      "3945-1",
+      "3839-7",
+      "6220-2",
+      "4232-1",
+      "3974-4"
+    ]
+  },
+  "train_os": {
+    "kidney": {
+      "train_patches": 5653,
+      "train_samples": 15,
+      "val_patches": 496,
+      "val_sample_count": 1,
+      "val_samples": [
+        "6220-2"
+      ]
+    },
+    "prostate": {
+      "train_patches": 17183,
+      "train_samples": 46,
+      "val_patches": 945,
+      "val_sample_count": 3,
+      "val_samples": [
+        "3945-1",
+        "3839-7",
+        "4332-2"
+      ]
+    },
+    "uterus": {
+      "train_patches": 3840,
+      "train_samples": 12,
+      "val_patches": 260,
+      "val_sample_count": 1,
+      "val_samples": [
+        "4232-1"
+      ]
+    }
+  },
+  "val_frac": 0.05,
+  "val_seed": 42
+}

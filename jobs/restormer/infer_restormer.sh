@@ -25,10 +25,10 @@ RESTORMER_VARIANT="${RESTORMER_VARIANT:-attention}"
 RESTORMER_RESULTS_ROOT="$VSLITE_ROOT/results"
 
 if [[ "$RESTORMER_VARIANT" == "attention" ]]; then
-  CONFIG_FILE="$VSLITE_ROOT/Restormer/config_i2i_restormer_perceptual.yaml"
+  CONFIG_FILE="$VSLITE_ROOT/Restormer/config_restormer_perceptual.yaml"
   CKPT_DIR="restormer_attn"
 else
-  CONFIG_FILE="$VSLITE_ROOT/Restormer/config_i2i_restormer_baseline.yaml"
+  CONFIG_FILE="$VSLITE_ROOT/Restormer/config_restormer.yaml"
   CKPT_DIR="restormer_base"
 fi
 

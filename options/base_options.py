@@ -250,15 +250,25 @@ class BaseOptions:
         parser.add_argument(
             '--evaluation_metrics',
             type=str,
-            default='fid',
-            help='Comma-separated: fid, psnr_ssim, or none.',
+            default='none',
+            help='Comma-separated: fid, psnr_ssim, or none (FID is test-only; default none for train).',
+        )
+        parser.add_argument(
+            '--convnext_normalize_input',
+            action='store_true',
+            help='ImageNet normalize inputs for ConvNeXt perceptual loss',
+        )
+        parser.add_argument(
+            '--convnext_loss_include_input',
+            action='store_true',
+            help='Include input in ConvNeXt perceptual loss',
         )
         parser.add_argument('--inception_weights', type=str, default='fid_inception')
         parser.add_argument(
             '--perceptual_encoder',
             type=str,
-            default='vgg',
-            help='baseline vgg method encoder',
+            default='convnext',
+            help='Perceptual encoder (ConvNeXt only; vgg is legacy alias)',
         )
         parser.add_argument(
             '--vgg_normalize_input',
@@ -412,9 +422,14 @@ class BaseOptions:
         try:
             opt.gan_loss = not opt.no_gan_loss
             opt.ganFeat_loss = not opt.no_ganFeat_loss
-            opt.vgg_loss = not opt.no_vgg_loss
+            if not hasattr(opt, 'no_convnext_loss'):
+                opt.no_convnext_loss = getattr(opt, 'no_vgg_loss', True)
+            opt.convnext_loss = not opt.no_convnext_loss
+            opt.vgg_loss = opt.convnext_loss
             opt.L1_loss = not opt.no_L1_loss
             opt.contrastive_loss = not opt.no_contrastive_loss
+            if getattr(opt, 'perceptual_encoder', 'vgg') == 'vgg':
+                opt.perceptual_encoder = 'convnext'
         except AttributeError:
             pass
         return opt
