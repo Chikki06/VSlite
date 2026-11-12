@@ -3,7 +3,7 @@
 # Example: RUN=c13_ps1024 NUM_SAMPLES=8 sbatch interpret.sh
 #SBATCH --job-name=cn_cbam
 #SBATCH --partition=IllinoisComputes-GPU
-#SBATCH --exclude=ccc0387,ccc0388
+#SBATCH --exclude=ccc0388
 #SBATCH -A kf4-ic
 #SBATCH --gres=gpu:A100:1
 #SBATCH --cpus-per-task=8

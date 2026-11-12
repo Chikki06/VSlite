@@ -4,7 +4,7 @@
 
 This repo mixes 4 “families” of code:
 
-- **CISLNet (contrastive pix2pix)**: training + patch-eval lives under `scripts/`. Jobs: `jobs/cislnet/`. Ablation env guide: `jobs/_lib/ABLATIONS.md`.
+- **CISLNet (contrastive pix2pix)**: training + patch-eval lives under `scripts/`. Jobs: `jobs/cislnet/`. Ablation env guide: `jobs/_lib/ABLATIONS.md`. Architecture sweep groups: **A = attention** (incl. legacy tags `b4_eca`/`b5_simam` = A5/A6), **B = structure**, **C = color**, **IO = fp16**. D-combos: `scripts/select_pareto_d1.py` + `jobs/cislnet/experiments/submit_d_combos.sh` (ConvNeXt-LPIPS top-K×top-K). Results writeup: `results_inference.md`.
 - **SwinGAN**: lives under `SwinGAN/` (plus Slurm entrypoints under `/u/akshahi2/jobs/swingan/...`).
 - **Restormer**: lives under `Restormer/` (plus Slurm entrypoints under `/u/akshahi2/jobs/restormer/...`).
 - **NAFNet**: lives under `NAFNet/` (plus Slurm entrypoints under `/u/akshahi2/jobs/nafnet/...`).
@@ -20,6 +20,15 @@ This repo mixes 4 “families” of code:
 | SwinGAN i2i | **32 × 1 → 32** | `batch_size` in `SwinGAN/config_i2i_*.yaml` |
 
 **Restormer attn 13 train** (`restormer_attn_13.sh`): `scavenger` + `gres=gpu:H100:1`, `--time=1-00:00:00`. Other Restormer train scripts: `IllinoisComputes-GPU` unless edited.
+
+### Training preview samples (`results/<model>/<run>/samples/`)
+
+Qualitative saves during training (every ~N iters via `util/save_schedule.py`):
+
+- Code path: `util/preview_manager.py` → `util/sample_grid.save_unified_sample` → `epochEEE_stepSSSSSSSSS_pXX.png`
+- **Layout:** each file is **2 tiles** — **left = generation (pred), right = real (target)**. One pair per PNG (not a big grid).
+- **Source:** held-out **test** patches locked once at train start (`util/fixed_preview.gather_fixed_preview_batch`, `shuffle=False` / seed-dependent; optional `PREVIEW_TILE_LIST`). Same patches every epoch and across seeded runs.
+- **No training side effects:** inference only (`torch.no_grad` + `eval`); never gradient updates.
 
 ### Canonical evaluation flow (what “test” means)
 
@@ -67,6 +76,29 @@ Use these directly:
 - Baseline FID evaluation logic historically used `evaluation/cache`. If a run “completes” instantly, clear:
   - `evaluation/cache/`
   - and the model’s `results/<model>/test/...` directory for that run
+
+### Broken node exclusions (authoritative)
+
+Node exclusions live in two places (keep both in sync):
+
+- `jobs/_lib/slurm_defaults.sh` → `SLURM_EXCLUDE_NODES` (used by all `submit_*.sh` chain scripts)
+- `#SBATCH --exclude=` in `jobs/cislnet/{train/test/wsi}/*.sh`
+
+Current: `ccc0388` (known-bad since 2024 era) + `ccc0390` — CUDA driver broken since
+2026-10-29 (nvidia-smi sees the A100, but `torch.cuda.is_available()=False` node-wide;
+multiple users hit it). Before adding a node to the list, confirm it is a node fault,
+not a user bug: check `sacct -N <node> -S <date>` for other users' fast-fail jobs.
+
+**Dependency-chain recovery pattern** (`submit_ironly.sh` / `submit_c13_noattn_objective_ablation.sh`
+chains: train → te (afterok) → wsi). When train jobs die, all downstream te/wsi land in
+`DependencyNeverSatisfied` and never self-heal. Recovery: (1) cancel the DNS te/wsi
+pendings, (2) resubmit train with `--export=...,CONTINUE_TRAIN=true` to resume from
+`results/cislnet/<run>/{iter.txt,latest_net_*}` (skip the 2-hop chain; `--requeue` +
+`SLURM_RESTART_COUNT` auto-resume in `train.sh` covers walltime/node-death), (3) resubmit
+te/wsi with `afterok` on the NEW train JIDs. ir1 (training complete) needs no train
+resubmit, only te/wsi with no train dep. Ephemeral `PermissionError` on
+`results/cislnet/<run>/loss_log.txt` (two ir runs, Oct 29) was a transient project-FS
+ACL glitch — recheck `open(path,'a')` before blaming the training code.
 
 ### Common gotchas fixed recently
 

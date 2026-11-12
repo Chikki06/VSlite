@@ -337,6 +337,18 @@ def main():
     should_save_image = make_iter_schedule(total_iters, target_saves=50)
     early = EarlyStopping(patience=int(vcfg.early_stop_patience))
 
+    # Locked pred|real previews from held-out test tiles (inference only).
+    _preview_ds = test_ds if len(test_ds) > 0 else val_ds
+    _preview_bs = min(int(cfg.batch_size), 8) if int(cfg.batch_size) > 0 else 1
+    preview_loader = DataLoader(
+        _preview_ds,
+        batch_size=max(1, _preview_bs),
+        shuffle=False,
+        num_workers=0,
+        pin_memory=False,
+    )
+
+    @torch.no_grad()
     def _preview_forward(fixed_batch):
         was_train = model.training
         model.eval()
@@ -348,7 +360,7 @@ def main():
         return y_fp, y_hat_fp
 
     preview = PreviewManager(
-        preview_loader=val_loader,
+        preview_loader=preview_loader,
         out_dir=sample_dir,
         tb=tb,
         should_save=should_save_image,

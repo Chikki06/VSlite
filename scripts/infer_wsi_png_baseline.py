@@ -246,6 +246,9 @@ def _select_ir_indices(c_tot: int, *, num_ir_channels: int, ir_channel_indices: 
         return idx, len(idx)
     else:
         n = int(num_ir_channels)
+        if n == 0:
+            # VIS-only run (input_nc=3, no IR bands): empty IR index set.
+            return [], 0
         if n <= 0 or n > c_tot:
             raise ValueError(f"Invalid --num_ir_channels={n} for IR channels={c_tot}")
         return list(range(n)), n
@@ -736,9 +739,9 @@ def main() -> None:
     opt.no_flip_vert = True
     opt.no_rotate = True
     try:
-        env_bs = int(os.environ.get("WSI_BATCH_SIZE", "1"))
+        env_bs = int(os.environ.get("WSI_BATCH_SIZE", "16"))
     except Exception:
-        env_bs = 1
+        env_bs = 16
     cli_bs = args.batch_size
     opt.batch_size = int(cli_bs) if cli_bs is not None else int(env_bs)
     if opt.batch_size <= 0:

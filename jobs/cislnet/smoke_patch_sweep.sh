@@ -3,7 +3,7 @@
 # Usage: sbatch jobs/cislnet/smoke_patch_sweep.sh
 #SBATCH --job-name=cn_smoke
 #SBATCH --partition=IllinoisComputes-GPU
-#SBATCH --exclude=ccc0387,ccc0388
+#SBATCH --exclude=ccc0388
 #SBATCH -A kf4-ic
 #SBATCH --gres=gpu:A100:1
 #SBATCH --cpus-per-task=8

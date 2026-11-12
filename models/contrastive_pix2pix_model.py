@@ -174,7 +174,10 @@ class ContrastivePix2PixModel(torch.nn.Module):
             g_loss, generated = self.compute_generator_loss(input_semantics, real_image)
             return g_loss, generated
         elif mode == 'discriminator':
-            return self.compute_discriminator_loss(input_semantics, real_image)
+            fake_image = data.get('fake_image') if isinstance(data, dict) else None
+            return self.compute_discriminator_loss(
+                input_semantics, real_image, fake_image=fake_image
+            )
         elif mode == 'encode_only':
             z, mu, logvar = self.encode_z(real_image)
             return mu, logvar
@@ -340,6 +343,21 @@ class ContrastivePix2PixModel(torch.nn.Module):
     def preprocess_input(self, data):
         return data['input'], data['target']
 
+    def _images_for_pretrained_heads(self, fake_image, real_image):
+        """Map linear H&E to sRGB before PatchNCE / Discriminator (C1).
+
+        Generator outputs and dataset targets stay in the training color space;
+        only heads that expect sRGB-like stats see the converted tensors.
+        """
+        if str(getattr(self.opt, 'he_color_space', 'srgb')).lower() != 'linear':
+            return fake_image, real_image
+        from util.color_space import linear_to_srgb
+
+        return (
+            linear_to_srgb(fake_image, minus1_1=True),
+            linear_to_srgb(real_image, minus1_1=True),
+        )
+
     def compute_generator_loss(self, input_semantics, real_image):
         G_losses = {}
 
@@ -352,17 +370,25 @@ class ContrastivePix2PixModel(torch.nn.Module):
         if self.opt.use_vae:
             G_losses['KLD'] = KLD_loss
 
+        fake_for_d, real_for_d = self._images_for_pretrained_heads(fake_image, real_image)
+
         pred_fake, pred_real = None, None
         if (not self.opt.no_gan_loss) or (not self.opt.no_ganFeat_loss):
             pred_fake, pred_real = self.discriminate(
                 input_semantics,
-                fake_image,
-                real_image,
+                fake_for_d,
+                real_for_d,
             )
 
         if not self.opt.no_L1_loss:
             G_losses['G_L1'] = (
                 self.criterionFeat(fake_image, real_image) * self.opt.lambda_L1
+            )
+
+        if not self.opt.no_L2_loss:
+            G_losses['G_L2'] = (
+                torch.nn.functional.mse_loss(fake_image, real_image)
+                * self.opt.lambda_L2
             )
 
         if not self.opt.no_gan_loss:
@@ -386,15 +412,15 @@ class ContrastivePix2PixModel(torch.nn.Module):
 
         if not getattr(self.opt, 'no_convnext_loss', getattr(self.opt, 'no_vgg_loss', True)):
             G_losses['ConvNeXt'] = (
-                self.criterionVGG(fake_image, real_image)
+                self.criterionVGG(fake_for_d, real_for_d)
                 * getattr(self.opt, 'lambda_convnext', getattr(self.opt, 'lambda_vgg', 1.0))
             )
 
         if not self.opt.no_contrastive_loss:
             nce_loss = self.compute_NCE_loss(
                 input_semantics,
-                fake_image,
-                real_image,
+                fake_for_d,
+                real_for_d,
                 self.criterionNCE,
                 lambda_NCE=self.opt.lambda_NCE,
                 layer_weights=self.layer_weights,
@@ -502,18 +528,23 @@ class ContrastivePix2PixModel(torch.nn.Module):
             total_nce_loss += loss.mean()
         return total_nce_loss / num_layers
 
-    def compute_discriminator_loss(self, input_semantics, real_image):
+    def compute_discriminator_loss(
+        self, input_semantics, real_image, fake_image=None
+    ):
         D_losses = {}
         if self.opt.no_gan_loss:
             return D_losses
 
-        with torch.no_grad():
-            fake_image, _ = self.generate_fake(input_semantics, real_image)
-            fake_image = fake_image.detach()
-            fake_image.requires_grad_()
+        # Prefer the G-step fake (detached) to skip a second full netG forward.
+        # Fall back to no_grad regenerate when G was skipped this iter.
+        if fake_image is None:
+            with torch.no_grad():
+                fake_image, _ = self.generate_fake(input_semantics, real_image)
+        fake_image = fake_image.detach()
 
+        fake_for_d, real_for_d = self._images_for_pretrained_heads(fake_image, real_image)
         pred_fake, pred_real = self.discriminate(
-            input_semantics, fake_image, real_image
+            input_semantics, fake_for_d, real_for_d
         )
 
         D_losses['D_Fake'] = self.criterionGAN(pred_fake, False, for_discriminator=True)

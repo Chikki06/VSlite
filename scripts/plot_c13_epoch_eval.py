@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Figures + results_c13.md for a single CISLNet run evaluated every N epochs.
 
-Default run is c13_e35 (frozen all-organ train, canonical test.txt).
+Default run is c13 (frozen all-organ train, canonical test.txt).
 Former val.txt samples (10442, 3840) live in test.txt; there is no val split.
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ UNIFIED = ROOT / "results" / "unified" / "cislnet"
 OUT = ROOT / "results_figures_c13"
 MD_PATH = ROOT / "results_c13.md"
 
-DEFAULT_RUN = "c13_e35"
+DEFAULT_RUN = "c13"
 DEFAULT_TRAIN_PATCHES = 60047
 COLOR = "#1b4f72"
 # Frozen split (dataset/data_frozen): all ir/*.npy minus test.txt.
@@ -492,7 +492,7 @@ CISLNet `contrastive_pix2pix`, 13-channel IR+VIS, AttUNet G, ConvNeXt NCE, 1024�
 
 There is **no val split**. Former `val.txt` samples (`10442`, `3840`) were moved into `test.txt` because classic CISLNet never used val for checkpoint selection. `val.txt` is kept present-but-empty so the dataset loader does not hash-split train into a fake val set.
 
-This **is** the canonical `dataset/data_frozen` split, not the organ-exp holdouts in [`results.md`](./results.md). FID and LPIPS both use ConvNeXt-Tiny on TCGA/H&E features (FID = Fréchet distance; LPIPS = Zhang lin0 equal-weight stages — not AlexNet LPIPS, not Inception-FID).
+This **is** the canonical `dataset/data_frozen` split, not the organ-exp holdouts in [`results_organ.md`](./results_organ.md). FID and LPIPS both use ConvNeXt-Tiny on TCGA/H&E features (FID = Fréchet distance; LPIPS = Zhang lin0 equal-weight stages — not AlexNet LPIPS, not Inception-FID).
 
 <img src="./results_figures_c13/fig_data_split.png" alt="Frozen split patch counts: 60047 train, 6929 test." />
 

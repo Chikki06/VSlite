@@ -1,16 +1,18 @@
-# Default CISLNet on the frozen all-organ split (c13_e35)
+# Default CISLNet on the frozen all-organ split (c13)
 
 **As of 2026-08-13.** Patch-level eval on the canonical frozen test set. Figures: [`results_figures_c13/`](./results_figures_c13/).
+
+Related: [`results_organ.md`](./results_organ.md) (organ holdouts), [`results_inference.md`](./results_inference.md) (Vis+ / latency).
 
 ## Status
 
 **0 / 18** planned even-epoch evals have `metrics.json` so far (epochs none).
 
-Train job writes numbered `{epoch}_net_G.pth` every 2 epochs (and the final epoch 35). Eval is **post-training**: one sweep job scores each saved checkpoint on `dataset/data_frozen/test.txt`.
+Train job writes numbered `{epoch}_net_G.pth` every 2 epochs (target final epoch 30). Eval is **post-training**: one sweep job scores each saved checkpoint on `dataset/data_frozen/test.txt`. The August train timed out mid-epoch 25; best train-log LPIPS among saved ckpts is epoch 24 (promoted to `latest`).
 
 ## Setup
 
-CISLNet `contrastive_pix2pix`, 13-channel IR+VIS, AttUNet G, ConvNeXt NCE, 1024² patches, **35 epochs**, lr 2e-4, batch 10, `save_epoch_freq=2`. Training pool is the default frozen split (no organ-exp allowlist).
+CISLNet `contrastive_pix2pix`, 13-channel IR+VIS, AttUNet G, ConvNeXt NCE, 1024² patches, **30 epochs** (`results/cislnet/c13`), lr 2e-4, batch 10, `save_epoch_freq=2`. Training pool is the default frozen split (no organ-exp allowlist). The older short 15-ep run lives at `c13_e15_legacy`.
 
 | Split | Source | Patches |
 |-------|--------|--------:|
@@ -19,7 +21,7 @@ CISLNet `contrastive_pix2pix`, 13-channel IR+VIS, AttUNet G, ConvNeXt NCE, 1024�
 
 There is **no val split**. Former `val.txt` samples (`10442`, `3840`) were moved into `test.txt` because classic CISLNet never used val for checkpoint selection. `val.txt` is kept present-but-empty so the dataset loader does not hash-split train into a fake val set.
 
-This **is** the canonical `dataset/data_frozen` split, not the organ-exp holdouts in [`results.md`](./results.md). FID and LPIPS both use ConvNeXt-Tiny on TCGA/H&E features (FID = Fréchet distance; LPIPS = Zhang lin0 equal-weight stages — not AlexNet LPIPS, not Inception-FID).
+This **is** the canonical `dataset/data_frozen` split, not the organ-exp holdouts in [`results_organ.md`](./results_organ.md). FID and LPIPS both use ConvNeXt-Tiny on TCGA/H&E features (FID = Fréchet distance; LPIPS = Zhang lin0 equal-weight stages — not AlexNet LPIPS, not Inception-FID).
 
 <img src="./results_figures_c13/fig_data_split.png" alt="Frozen split patch counts: 60047 train, 6929 test." />
 
@@ -66,9 +68,9 @@ Interpretation will be filled in once the post-train epoch sweep writes `metrics
 ## Reproduce
 
 ```bash
-# queue 35-epoch train + post-train even-epoch eval (already submitted once)
+# queue 30-epoch train + post-train even-epoch eval
 ./jobs/cislnet/submit_c13_epoch_eval.sh
 
 # regenerate figures + this file after metrics exist
-python scripts/plot_c13_epoch_eval.py --run c13_e35
+python scripts/plot_c13_epoch_eval.py --run c13
 ```

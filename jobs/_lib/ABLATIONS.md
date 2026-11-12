@@ -52,10 +52,15 @@ sbatch jobs/restormer/train/train.sh
 | Variable | Stacks | Effect |
 |----------|--------|--------|
 | `LAMBDA_L1` | CISLNet, i2i | L1 weight. |
+| `LAMBDA_L2` | CISLNet | L2 (MSE) pixel weight (default `1.0`; term off unless `USE_L2=1`). |
+| `USE_L1` | CISLNet | `1` enable / `0` force-off pixel L1 (codebase default: **off**, `no_L1_loss=true`). |
+| `USE_L2` | CISLNet | `1` enable / `0` force-off pixel L2 (MSE) (codebase default: **off**). |
+| `USE_NCE` | CISLNet | `1` / `0` toggle contrastive NCE loss (codebase default: **on**, `lambda_NCE=10`). |
 | `LAMBDA_NCE` | CISLNet | Contrastive / NCE weight. |
 | `LAMBDA_PERC` | SwinGAN, Restormer (attn) | ConvNeXt perceptual loss (not VGG). |
-| `LAMBDA_GAN` | CISLNet, SwinGAN | GAN weight. |
+| `LAMBDA_GAN` | CISLNet, SwinGAN | GAN weight (LSGAN on logits — least-squares / L2-form, `lambda_gan=1`). |
 | `NO_GAN` | `0` | Set `1` to disable GAN term where supported. |
+| `ATTENTION_TYPE` | CISLNet | Skip-attention for AttUnet: `none` = attention-free U-Net (default `cbam`). |
 
 ## Optimizer & schedule
 
@@ -99,7 +104,7 @@ TensorBoard:
 tensorboard --logdir /projects/illinois/eng/bioe/rxb/akshat/VSlite/results/unified
 ```
 
-Compare `l1/val` across `cislnet/c13`, `restormer/a13`, etc. Image slider: tag `preview/fixed_val/grid` (epoch axis).
+Compare `l1/val` across `cislnet/c13`, `restormer/a13`, etc. Image slider: tags `preview/fixed_test/pXX` (epoch axis; left=pred, right=real).
 
 ## Test-only metrics (never set during training)
 
@@ -149,3 +154,24 @@ Some jobs still read legacy env names; these are mapped in training code:
 | `INPUT_NC` | `NUM_CHANNELS` (CISLNet) |
 
 See [`FRAMEWORK.md`](../../FRAMEWORK.md) for output paths and the new-model checklist.
+
+## CISLNet architecture ablation groups (Exp 2)
+
+Jobs under `jobs/cislnet/experiments/` write `TRACK_GROUP` into
+`results/cislnet/experiments/tracking.csv`. Canonical meaning:
+
+| Group | Meaning | Runs |
+|-------|---------|------|
+| **A** | Skip-connection **attention** | a1 CoordAtt, a2 Triplet, a3 SCSE, a4 GCBlock, **b4 ECA (=A5)**, **b5 SimAM (=A6)** |
+| **B** | **Structure / capacity** | b1 half decoder, b2 SCConv, b3 ConvNeXt encoder, b6 depthwise, b7 PixelShuffle |
+| **C** | Color space | c1 linear HE |
+| **IO** | Data-path only (not a D knob) | fp16 on-disk IR |
+
+Legacy run tags `b4_eca_*` / `b5_simam_*` stay for checkpoint continuity but are
+**group A**. D-combine selection (`scripts/select_pareto_d1.py`) ranks by
+**ConvNeXt-LPIPS** then latency and writes the top-K×top-K grid under
+`results/cislnet/experiments/d_combos/`. Queue with:
+
+```bash
+bash jobs/cislnet/experiments/submit_d_combos.sh   # default TOP_K=2 → 4 jobs
+```

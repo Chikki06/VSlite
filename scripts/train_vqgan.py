@@ -283,8 +283,8 @@ def main() -> None:
     samples_dir = out_root / "samples"
     samples_dir.mkdir(parents=True, exist_ok=True)
 
-    # Align the preview tiles with SwinGAN/Restormer: use the same VSLiteI2IDataset
-    # val split, and take the first 8 items deterministically (shuffle=False).
+    # Align preview tiles with other stacks: held-out **test** split, first 8
+    # items deterministically (shuffle=False). Same patches every epoch / seed.
     preview_input_mode = "irvis13" if int(args.input_nc) == 13 else "ir10"
     preview_ds = VSLiteI2IDataset(
         args.dataroot,
@@ -292,7 +292,7 @@ def main() -> None:
         num_ir_channels=int(args.num_ir_channels),
         img_size=int(args.image_size),
         he_scale="minus1_1",
-        split="val",
+        split="test",
         split_seed=1337,
         split_fracs=SplitFractions(train=0.9, val=0.05, test=0.05),
     )

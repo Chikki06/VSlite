@@ -3,8 +3,10 @@ Copyright (C) 2019 NVIDIA Corporation.  All rights reserved.
 Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
 """
 
+import torch
 from models import create_model
 from models.networks.sync_batchnorm import DataParallelWithCallback
+from util.batch_device import move_to_device
 
 
 class Pix2PixTrainer:
@@ -17,12 +19,20 @@ class Pix2PixTrainer:
     def __init__(self, opt):
         self.opt = opt
         self.pix2pix_model = create_model(opt)
-        if len(opt.gpu_ids) > 0:
+        n_gpu = len(opt.gpu_ids)
+        self._use_dp = n_gpu > 1
+        if self._use_dp:
             self.pix2pix_model = DataParallelWithCallback(
                 self.pix2pix_model, device_ids=opt.gpu_ids
             )
             self.pix2pix_model_on_one_gpu = self.pix2pix_model.module
+            self.device = torch.device(f"cuda:{opt.gpu_ids[0]}")
+        elif n_gpu == 1:
+            self.device = torch.device(f"cuda:{opt.gpu_ids[0]}")
+            self.pix2pix_model = self.pix2pix_model.to(self.device)
+            self.pix2pix_model_on_one_gpu = self.pix2pix_model
         else:
+            self.device = torch.device("cpu")
             self.pix2pix_model_on_one_gpu = self.pix2pix_model
 
         self.generated = None
@@ -33,8 +43,15 @@ class Pix2PixTrainer:
             ) = self.pix2pix_model_on_one_gpu.create_optimizers(opt)
             self.old_lr = opt.lr
 
+    def _prepare_data(self, data):
+        # DataParallel scatters CPU (pinned) batches; only single-GPU needs explicit H2D.
+        if self._use_dp or self.device.type == "cpu":
+            return data
+        return move_to_device(data, self.device, non_blocking=True)
+
     def run_generator_one_step(self, data, iter=None):
-        self.optimizer_G.zero_grad()
+        data = self._prepare_data(data)
+        self.optimizer_G.zero_grad(set_to_none=True)
         g_losses, generated = self.pix2pix_model(data, mode='generator')
         g_loss = sum(g_losses.values()).mean()
         g_loss.backward()
@@ -45,7 +62,10 @@ class Pix2PixTrainer:
     def run_discriminator_one_step(self, data, iter=None):
         self.d_losses = {}
         if self.optimizer_D is not None:
-            self.optimizer_D.zero_grad()
+            data = self._prepare_data(data)
+            if not self._use_dp and self.generated is not None:
+                data = {**data, 'fake_image': self.generated}
+            self.optimizer_D.zero_grad(set_to_none=True)
             d_losses = self.pix2pix_model(data, mode='discriminator')
             if d_losses:
                 d_loss = sum(d_losses.values()).mean()

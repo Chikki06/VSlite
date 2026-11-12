@@ -21,15 +21,16 @@ source "$VSLITE_ROOT/jobs/_lib/vslite_env.sh"
 source "$VSLITE_ROOT/jobs/_lib/slurm_defaults.sh"
 
 NUM_CHANNELS="${NUM_CHANNELS:-13}"
-EPOCHS="${EPOCHS:-35}"
+EPOCHS="${EPOCHS:-30}"
 SAVE_EPOCH_FREQ="${SAVE_EPOCH_FREQ:-2}"
 TEST_EVERY="${TEST_EVERY:-2}"
 NUM_TEST="${NUM_TEST:-75000}"
 DRY_RUN="${DRY_RUN:-0}"
 SKIP_TRAIN="${SKIP_TRAIN:-0}"
 CONTINUE_TRAIN="${CONTINUE_TRAIN:-false}"
-# Distinct from the incomplete May `c13` / `vs13` run (timeout at ~e28, saves every 5).
-RUN="${RUN:-c13_e35}"
+# Canonical default CISLNet run (EPOCHS=30, same as train.sh). Distinct from
+# legacy May `c13_e15_legacy` / `vs13` (timeout, saves every 5).
+RUN="${RUN:-c13}"
 NAME="${NAME:-$RUN}"
 TRAIN_TIME="${TRAIN_TIME:-3-00:00:00}"
 TEST_TIME="${TEST_TIME:-1-12:00:00}"

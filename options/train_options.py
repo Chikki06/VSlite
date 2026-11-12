@@ -237,6 +237,18 @@ class TrainOptions(BaseOptions):
             help='whether to include L1 loss',
         )
         parser.add_argument(
+            '--L2_loss',
+            default=False,
+            type=util.str2bool,
+            help='whether to include L2 (MSE) loss',
+        )
+        parser.add_argument(
+            '--lambda_L2',
+            type=float,
+            default=1.0,
+            help='weight for L2 (MSE) pixel loss',
+        )
+        parser.add_argument(
             '--vgg_loss',
             default=True,
             type=util.str2bool,
@@ -259,6 +271,12 @@ class TrainOptions(BaseOptions):
             default=True,
             type=util.str2bool,
             help='if specified, do *not* use Generator L1 pixel loss.',
+        )
+        parser.add_argument(
+            '--no_L2_loss',
+            default=True,
+            type=util.str2bool,
+            help='if specified, do *not* use Generator L2 (MSE) pixel loss.',
         )
         parser.add_argument(
             '--use_crn_lambdas',

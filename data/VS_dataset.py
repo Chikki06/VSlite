@@ -553,6 +553,17 @@ class VSDataset(BaseDataset):
             else:
                 ir_data = ir_data[:, :, :num_ir_channels]
 
+            # VIS-only run (input_nc=3, num_ir_channels=0): no IR bands. Keep a
+            # 1ch dummy so resize/augmentation geometry stays synced with VIS/HE;
+            # it is dropped when the combined tensor is built below.
+            vis_only = (int(getattr(self.opt, 'input_nc', 13)) == 3
+                        and int(num_ir_channels) == 0)
+            if vis_only:
+                ir_data = np.zeros((ir_data.shape[0], ir_data.shape[1], 1), dtype=np.float32)
+
+            # fp16 on-disk IR (IR_fp16) — promote before clip/resize for OpenCV.
+            if getattr(ir_data, 'dtype', None) != np.float32:
+                ir_data = np.asarray(ir_data, dtype=np.float32)
             ir_data = np.clip(ir_data, 0, 5)
             img = ir_data
 
@@ -566,7 +577,10 @@ class VSDataset(BaseDataset):
             target_size = (sz_int, sz_int)
 
             # Resize all channels in one call (much faster than per-channel Python loops).
+            # OpenCV drops the channel axis for single-channel arrays (H,W,1)->(H,W).
             img_upsampled = cv2.resize(img, target_size, interpolation=cv2.INTER_CUBIC)
+            if img_upsampled.ndim == 2:
+                img_upsampled = img_upsampled[:, :, np.newaxis]
 
 
 
@@ -589,30 +603,84 @@ class VSDataset(BaseDataset):
                 img_H = img_H_upsampled
             img_H = img_H / 256
             img_H = np.clip(img_H, 0, 1)
-            img_H = (img_H - 0.5) / 0.5
-            if str(getattr(self.opt, 'he_color_space', 'srgb')).lower() == 'linear':
-                from util.color_space import apply_he_color_space
-                import torch as _torch
-                img_H = apply_he_color_space(_torch.from_numpy(img_H.transpose(2, 0, 1)), 'linear', minus1_1=True).numpy()
-                if img_H.ndim == 3 and img_H.shape[0] == 3:
-                    img_H = img_H.transpose(1, 2, 0)
+            he_space = str(getattr(self.opt, 'he_color_space', 'srgb')).lower()
+            if he_space == 'linear':
+                from util.color_space import srgb_to_linear
 
+                # Plan C1: sRGB→linear on VIS and H&E before [-1,1].
+                # Keep CHW torch tensors (Allaug already returns CHW); never HWC —
+                # HWC targets break D cat (fake BCHW vs real BHWC → size 3 vs 1024).
+                def _as_chw01(arr):
+                    if isinstance(arr, torch.Tensor):
+                        t = arr.float()
+                        if t.ndim == 3 and t.shape[0] in (1, 3):
+                            return t
+                        if t.ndim == 3 and t.shape[-1] in (1, 3):
+                            return t.permute(2, 0, 1).contiguous()
+                        return t
+                    a = np.asarray(arr, dtype=np.float32)
+                    if a.ndim == 3 and a.shape[-1] in (1, 3):
+                        a = a.transpose(2, 0, 1)
+                    return torch.from_numpy(np.ascontiguousarray(a))
 
-
-            trans1 = transforms.ToTensor()
+                img_H = srgb_to_linear(_as_chw01(img_H), minus1_1=False)
+                img_H = img_H.clamp(0.0, 1.0) * 2.0 - 1.0
+                img_V = srgb_to_linear(_as_chw01(img_V), minus1_1=False).clamp(0.0, 1.0)
+            else:
+                img_H = (img_H - 0.5) / 0.5
+                if isinstance(img_H, np.ndarray) and img_H.ndim == 3 and img_H.shape[-1] in (1, 3):
+                    img_H = torch.from_numpy(
+                        np.ascontiguousarray(img_H, dtype=np.float32)
+                    ).permute(2, 0, 1)
+                elif isinstance(img_H, np.ndarray):
+                    img_H = torch.from_numpy(np.ascontiguousarray(img_H, dtype=np.float32))
 
 
         except Exception as e:
-            return self.__getitem__((index + 1) % len(self.list_IR))
+            # Skip corrupt/unreadable samples, but never recurse forever (Vis+1
+            # previously OOM'd when every sample failed the same way).
+            nxt = (int(index) + 1) % max(1, len(self.list_IR))
+            depth = int(getattr(self, "_getitem_retry_depth", 0)) + 1
+            if depth >= min(32, max(1, len(self.list_IR))):
+                raise RuntimeError(
+                    f"VS_dataset.__getitem__ failed after {depth} retries "
+                    f"(start_index={index}, last_error={type(e).__name__}: {e})"
+                ) from e
+            self._getitem_retry_depth = depth
+            try:
+                return self.__getitem__(nxt)
+            finally:
+                self._getitem_retry_depth = 0
 
         # Channel policy must match generator input_nc (see AttUnet first conv).
         # IR-only: input_nc == selected_num_ir_channels (e.g. 10 or 3).
         # IR+VIS:  input_nc == selected_num_ir_channels + 3 (e.g. 13 or 6).
         # Any other pair used to fall through to IR+VIS and produced 13ch tensors while opt.input_nc stayed 3.
+        def _ensure_chw_tensor(x):
+            if isinstance(x, torch.Tensor):
+                return x.float()
+            a = np.asarray(x, dtype=np.float32)
+            if a.ndim == 3 and a.shape[0] not in (1, 3, 10, 13) and a.shape[-1] in (1, 3, 10, 13):
+                a = a.transpose(2, 0, 1)
+            return torch.from_numpy(np.ascontiguousarray(a))
+
+        img_upsampled = _ensure_chw_tensor(img_upsampled)
+        if not isinstance(img_V, torch.Tensor) or (
+            isinstance(img_V, torch.Tensor) and img_V.ndim == 3 and img_V.shape[0] not in (1, 3)
+            and img_V.shape[-1] in (1, 3)
+        ):
+            img_V = _ensure_chw_tensor(img_V)
+        else:
+            img_V = img_V.float()
+        img_H = _ensure_chw_tensor(img_H)
+
         input_nc = getattr(self.opt, 'input_nc', 13)
         # num_ir_channels may be overridden by --ir_channel_indices above; infer from tensor if needed.
         num_ir_channels = int(img_upsampled.shape[0]) if hasattr(img_upsampled, "shape") else getattr(self.opt, 'num_ir_channels', 10)
-        if input_nc == num_ir_channels:
+        if int(input_nc) == 3 and int(getattr(self.opt, 'num_ir_channels', 10)) == 0:
+            # VIS-only: drop the 1ch aug dummy, feed VIS RGB alone (c13-style net, 3ch in).
+            combined_data = img_V.float()
+        elif input_nc == num_ir_channels:
             combined_data = img_upsampled.float()
         elif input_nc == num_ir_channels + 3:
             combined_data = torch.cat([img_upsampled.float(), img_V.float()], dim=0)

@@ -36,7 +36,8 @@ export UNIFIED_TB_MIRROR_TRAIN="${UNIFIED_TB_MIRROR_TRAIN:-1}"
 
 # Fail fast on GPU jobs when Slurm allocated a GPU but PyTorch cannot see it.
 # Retry: cgroup / driver attach can lag a few seconds after the job starts.
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+# CPU-only jobs (e.g. remote DZI upload): export VSLITE_SKIP_CUDA_CHECK=1 before sourcing.
+if [[ -n "${SLURM_JOB_ID:-}" && "${VSLITE_SKIP_CUDA_CHECK:-0}" != "1" ]]; then
   _cuda_ok=0
   _cuda_try=0
   while [[ "$_cuda_try" -lt 8 ]]; do
@@ -54,6 +55,14 @@ if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "FATAL: torch.cuda.is_available()=False on $(hostname) job=$SLURM_JOB_ID CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}" >&2
     nvidia-smi -L 2>/dev/null || echo "nvidia-smi unavailable" >&2
     python -c "import torch; print('torch', torch.__version__, 'cuda_built', torch.version.cuda, 'cuda_is_available', torch.cuda.is_available())" >&2 || true
+    # Bounded requeue: an allocation whose GPU never becomes usable is a transient
+    # node failure. Requeue on a different node instead of failing the job
+    # outright (happened on ccc0390 after the 2026-10-29 slurmd restart which
+    # killed cn_tr_ir3 / cn_tr_ir5 hop2 in ~80 s).
+    if [[ "${SLURM_RESTART_COUNT:-0}" -lt 3 ]] && scontrol requeue "$SLURM_JOB_ID" >/dev/null 2>&1; then
+      echo "GPU unusable: requeued job (restart count ${SLURM_RESTART_COUNT:-0}; cap 3)" >&2
+      exit 0
+    fi
     exit 1
   fi
   unset _cuda_ok _cuda_try

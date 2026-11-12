@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
 from typing import Callable, Optional
 
 import torch
@@ -114,11 +113,9 @@ def make_i2sb_runner_class():
                 reals = split_batch_to_list(img_clean.detach().cpu())[:8]
                 preds = split_batch_to_list(img_recon)[:8]
                 name = f"epoch{epoch:03d}_step{int(it):09d}"
-                save_unified_sample(self._samples_dir, name, reals, preds)
-                if self._tb is not None:
-                    png = Path(self._samples_dir) / f"{name}.png"
-                    if png.is_file():
-                        self._tb.log_preview_png(png, epoch)
+                paths = save_unified_sample(self._samples_dir, name, reals, preds)
+                if self._tb is not None and paths:
+                    self._tb.log_preview_pngs(paths, epoch)
                 if self._run_logger is not None:
                     self._run_logger.write_iter(epoch, int(it))
 

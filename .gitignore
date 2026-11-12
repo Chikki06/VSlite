@@ -4,9 +4,6 @@ __pycache__/
 *$py.class
 *.so
 
-# C extensions
-*.so
-
 # Distribution / packaging
 build/
 develop-eggs/
@@ -58,8 +55,23 @@ torchenv/
 *.swo
 .DS_Store
 
+# Cursor: keep shared rules, ignore local agent state
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+
 # Local upstream clones (not part of VSlite)
 _vendor/
+CoordAttention/
+triplet-attention/
+GCnet-pytorch/
+Reproduction_of_ScConv_CVPR2023/
+ecanet/
+SimAM/
+
+# Graphify knowledge graph (regenerated locally)
+graphify-out/
+.graphify_*/
 
 # Data / Images / Raster
 *.npz
@@ -95,73 +107,11 @@ events.out.tfevents.*
 # Project Specific Directories (Results, Data, Logs)
 results/
 results_old/
+results_figures/
+results_figures_*/
 dataset/data_1024/
 dataset/data_frozen/
-input/IR/
-input/VIS/
-evaluation/cache/
-**/cache/# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Distribution / packaging
-build/
-dist/
-.eggs/
-*.egg-info/
-*.egg
-
-# Testing / coverage
-htmlcov/
-.coverage.*
-.pytest_cache/
-
-# Environments
-.env
-.venv
-venv/
-env/
-torchenv/
-
-# IDE / OS
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-
-# Data / Images / Raster
-*.npz
-*.npy
-*.bsq
-*.tif
-*.tiff
-*.hdr
-*.png
-*.jpg
-
-# Checkpoints / Deep Learning models
-*.pth
-*.pt
-*.h5
-*.onnx
-checkpoints/
-saved_models/
-tcga_tl_checkpoints/
-
-# Logging & Output
-*.log
-*.csv
-*.err
-*.out
-events.out*
-
-# Project Specific
-results/
-dataset/data_1024/
-dataset/data_frozen/
+dataset/data_frozen_fp16/
 input/IR/
 input/VIS/
 evaluation/cache/

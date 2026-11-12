@@ -1,18 +1,13 @@
 """Unified image-saving utility for all VSlite training and test scripts.
 
-Layout produced by ``save_unified_sample``:
+Layout produced by ``save_unified_sample`` — one PNG per pair:
 
-    +----+----+----+----+
-    | R0 | R1 | R4 | R5 |     <- top half  (8 real patches)
-    +----+----+----+----+        region 1: reals[0..3] (TL TR BL BR)
-    | R2 | R3 | R6 | R7 |        region 2: reals[4..7]
-    +----+----+----+----+
-    | P0 | P1 | P4 | P5 |     <- bottom half (8 predicted patches)
-    +----+----+----+----+        same region splits as reals
-    | P2 | P3 | P6 | P7 |
-    +----+----+----+----+
+    +------+------+
+    | pred | real |     <- left = generation, right = ground truth
+    +------+------+
 
-Each cell is rendered at the patch's native resolution (no resizing).
+Each call with ``N`` reals/preds writes ``N`` files named
+``{name}_p{00..N-1}.png``. Patches keep native resolution (no resize).
 """
 
 from __future__ import annotations
@@ -49,13 +44,6 @@ def tensor_to_png_array(
     return array
 
 
-def _pad_or_pick(items: Sequence[torch.Tensor], n: int) -> list[Optional[torch.Tensor]]:
-    out: list[Optional[torch.Tensor]] = []
-    for i in range(n):
-        out.append(items[i] if i < len(items) else None)
-    return out
-
-
 def _to_image(
     tensor: Optional[torch.Tensor],
     fallback_size: tuple[int, int],
@@ -72,10 +60,12 @@ def _to_image(
     return im
 
 
-def _max_cell_size(images: Sequence[Image.Image]) -> tuple[int, int]:
-    w = max((im.size[0] for im in images), default=0)
-    h = max((im.size[1] for im in images), default=0)
-    return (max(1, w), max(1, h))
+def _match_size(im: Image.Image, size: tuple[int, int], *, bg: int = 0) -> Image.Image:
+    if im.size == size:
+        return im
+    canvas = Image.new("RGB", size, color=(bg, bg, bg))
+    canvas.paste(im, (0, 0))
+    return canvas
 
 
 def save_unified_sample(
@@ -87,21 +77,22 @@ def save_unified_sample(
     pad: int = 4,
     bg: int = 0,
     input_mode: Optional[str] = None,
-) -> str:
-    """Save the 4-col x 4-row composite to ``<out_dir>/<name>.png``.
+) -> list[str]:
+    """Save one left=pred / right=real PNG per pair under ``<out_dir>``.
 
     Parameters
     ----------
     out_dir : str
         Directory to write into (created if missing).
     name : str
-        Filename stem (no extension).
+        Filename stem (no extension). Pair ``i`` is written as
+        ``{name}_p{i:02d}.png``.
     reals : sequence of tensors
-        Up to 8 real/target patches (CHW or 1xCHW), in [-1,1] or [0,1].
+        Real/target patches (CHW or 1xCHW), in [-1,1] or [0,1].
     preds : sequence of tensors
-        Up to 8 predicted patches with the same convention as ``reals``.
+        Predicted patches with the same convention as ``reals``.
     pad : int
-        Padding (in pixels) between cells.
+        Padding (in pixels) between the two tiles.
     bg : int
         Greyscale background value (0..255).
     input_mode : Optional[str]
@@ -110,53 +101,37 @@ def save_unified_sample(
 
     Returns
     -------
-    str
-        The path of the written PNG.
+    list[str]
+        Paths of the written PNGs (one per pair).
     """
+    del input_mode  # reserved
     os.makedirs(out_dir, exist_ok=True)
 
-    reals8 = _pad_or_pick(list(reals), 8)
-    preds8 = _pad_or_pick(list(preds), 8)
+    n = max(len(reals), len(preds))
+    if n == 0:
+        return []
 
-    real_imgs = [_to_image(t, (1, 1), bg=bg) for t in reals8]
-    pred_imgs = [_to_image(t, (1, 1), bg=bg) for t in preds8]
-    cw, ch = _max_cell_size([im for im in real_imgs + pred_imgs])
+    paths: list[str] = []
+    for i in range(n):
+        real_t = reals[i] if i < len(reals) else None
+        pred_t = preds[i] if i < len(preds) else None
+        pred_im = _to_image(pred_t, (1, 1), bg=bg)
+        real_im = _to_image(real_t, (1, 1), bg=bg)
+        cw = max(pred_im.size[0], real_im.size[0], 1)
+        ch = max(pred_im.size[1], real_im.size[1], 1)
+        pred_im = _match_size(pred_im, (cw, ch), bg=bg)
+        real_im = _match_size(real_im, (cw, ch), bg=bg)
 
-    def _resize_cells(images: list[Image.Image]) -> list[Image.Image]:
-        out = []
-        for im in images:
-            if im.size != (cw, ch):
-                resized = Image.new("RGB", (cw, ch), color=(bg, bg, bg))
-                resized.paste(im, (0, 0))
-                out.append(resized)
-            else:
-                out.append(im)
-        return out
+        out_w = pad + 2 * (cw + pad)
+        out_h = pad + (ch + pad)
+        canvas = Image.new("RGB", (out_w, out_h), color=(bg, bg, bg))
+        canvas.paste(pred_im, (pad, pad))
+        canvas.paste(real_im, (pad + cw + pad, pad))
 
-    real_imgs = _resize_cells(real_imgs)
-    pred_imgs = _resize_cells(pred_imgs)
-
-    cols = 4
-    rows = 4
-    out_w = pad + cols * (cw + pad)
-    out_h = pad + rows * (ch + pad)
-    canvas = Image.new("RGB", (out_w, out_h), color=(bg, bg, bg))
-
-    def _paste_region(region: list[Image.Image], row0: int, col0: int) -> None:
-        slots = [(row0, col0), (row0, col0 + 1), (row0 + 1, col0), (row0 + 1, col0 + 1)]
-        for im, (r, c) in zip(region, slots):
-            x0 = pad + c * (cw + pad)
-            y0 = pad + r * (ch + pad)
-            canvas.paste(im, (x0, y0))
-
-    _paste_region(real_imgs[0:4], row0=0, col0=0)
-    _paste_region(real_imgs[4:8], row0=0, col0=2)
-    _paste_region(pred_imgs[0:4], row0=2, col0=0)
-    _paste_region(pred_imgs[4:8], row0=2, col0=2)
-
-    out_path = os.path.join(out_dir, f"{name}.png")
-    canvas.save(out_path)
-    return out_path
+        out_path = os.path.join(out_dir, f"{name}_p{i:02d}.png")
+        canvas.save(out_path)
+        paths.append(out_path)
+    return paths
 
 
 def split_batch_to_list(tensor: torch.Tensor) -> list[torch.Tensor]:

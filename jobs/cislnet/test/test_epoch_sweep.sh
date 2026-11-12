@@ -3,10 +3,10 @@
 # then write results_c13.md + figures. Intended as an afterok dependent of train.
 #
 # Example:
-#   RUN=c13_e35 EPOCHS=35 TEST_EVERY=2 sbatch test_epoch_sweep.sh
+#   RUN=c13 EPOCHS=30 TEST_EVERY=2 sbatch test_epoch_sweep.sh
 #SBATCH --job-name=cn_te
 #SBATCH --partition=IllinoisComputes-GPU
-#SBATCH --exclude=ccc0387,ccc0388
+#SBATCH --exclude=ccc0388
 #SBATCH -A kf4-ic
 #SBATCH --gres=gpu:A100:1
 #SBATCH --cpus-per-task=16
@@ -28,11 +28,11 @@ VSLITE_ROOT="$(slurm_resolve_include_root jobs/_lib/vslite_env.sh "${BASH_SOURCE
 source "$VSLITE_ROOT/jobs/_lib/vslite_env.sh"
 
 NUM_CHANNELS="${NUM_CHANNELS:-13}"
-RUN="${RUN:-c${NUM_CHANNELS}_e35}"
+RUN="${RUN:-c${NUM_CHANNELS}}"
 NAME="${NAME:-$RUN}"
 RESULTS_DIR="${RESULTS_DIR:-$VSLITE_ROOT/results/cislnet}"
 NUM_TEST="${NUM_TEST:-75000}"
-EPOCHS="${EPOCHS:-35}"
+EPOCHS="${EPOCHS:-30}"
 TEST_EVERY="${TEST_EVERY:-2}"
 # Canonical frozen eval is test.txt only (former val samples were merged in).
 TEST_INCLUDES_VAL="${TEST_INCLUDES_VAL:-0}"
@@ -106,6 +106,7 @@ echo "epoch sweep done: evaluated=$n_ok skipped_existing=$n_skip missing_ckpt=$n
 python "$VSLITE_ROOT/scripts/plot_c13_epoch_eval.py" \
   --run "$NAME" \
   --train-patches "${TRAIN_PATCHES:-60047}" \
+  --out-dir "${PLOT_OUT_DIR:-$VSLITE_ROOT/results_figures_c13}" \
   || echo "WARNING: plot_c13_epoch_eval.py failed (metrics were still written)" >&2
 
 if (( n_ok + n_skip == 0 )); then

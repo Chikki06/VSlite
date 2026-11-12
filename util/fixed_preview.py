@@ -1,10 +1,11 @@
 """Fixed preview-batch helpers.
 
-At training start we capture 8 deterministic samples from a serial-mode
-loader. On every save trigger we run inference on the same batch so the
-sequential ``epoch*_step*.png`` PNGs are visually comparable across the run.
+At training start we capture ``N`` deterministic samples from a serial-mode
+**test** (held-out) loader. On every save trigger we run inference-only on the
+same batch so sequential ``epoch*_step*_pXX.png`` pair PNGs are visually
+comparable across epochs within a run and across seeded train runs.
 
-For test scripts we accumulate 8-sample windows from the streaming loader
+For streaming eval scripts we accumulate N-sample windows from the loader
 instead (so the full eval set gets coverage); see :func:`SampleBuffer`.
 """
 

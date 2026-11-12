@@ -50,7 +50,10 @@ class Pix2PixModel(torch.nn.Module):
             g_loss, generated = self.compute_generator_loss(input_semantics, real_image)
             return g_loss, generated
         elif mode == 'discriminator':
-            return self.compute_discriminator_loss(input_semantics, real_image)
+            fake_image = data.get('fake_image') if isinstance(data, dict) else None
+            return self.compute_discriminator_loss(
+                input_semantics, real_image, fake_image=fake_image
+            )
         elif mode == 'encode_only':
             z, mu, logvar = self.encode_z(real_image)
             return mu, logvar
@@ -226,15 +229,19 @@ class Pix2PixModel(torch.nn.Module):
 
         return G_losses, fake_image
 
-    def compute_discriminator_loss(self, input_semantics, real_image):
+    def compute_discriminator_loss(
+        self, input_semantics, real_image, fake_image=None
+    ):
         D_losses = {}
         if self.opt.no_gan_loss:
             return D_losses
 
-        with torch.no_grad():
-            fake_image, _ = self.generate_fake(input_semantics, real_image)
-            fake_image = fake_image.detach()
-            fake_image.requires_grad_()
+        # Prefer the G-step fake (detached) to skip a second full netG forward.
+        # Fall back to no_grad regenerate when G was skipped this iter.
+        if fake_image is None:
+            with torch.no_grad():
+                fake_image, _ = self.generate_fake(input_semantics, real_image)
+        fake_image = fake_image.detach()
 
         pred_fake, pred_real = self.discriminate(
             input_semantics, fake_image, real_image

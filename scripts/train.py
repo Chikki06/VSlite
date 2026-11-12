@@ -37,6 +37,10 @@ os.environ["WANDB_MODE"] = "dryrun"
 opt = TrainOptions().parse()
 print(" ".join(sys.argv))
 
+# Fixed patch sizes (VS_dataset → image_size) → stable cuDNN algo search.
+if len(getattr(opt, "gpu_ids", []) or []) > 0:
+    torch.backends.cudnn.benchmark = True
+
 # Resolve total epochs
 if getattr(opt, "total_epochs", 0) and int(opt.total_epochs) > 0:
     te = int(opt.total_epochs)
@@ -63,7 +67,10 @@ vcfg = VSliteTrainConfig(
 validate_train_config(vcfg)
 
 dataloader = data.create_dataloader(opt)
-_eval_kw = dict(serial_batches=True, isTrain=False, batch_size=1)
+# Eval/preview loaders are infrequent and serial — keep them single-process so
+# we don't multiply pinned-memory prefetch workers on top of the train loader
+# (that combination OOMs 64G Slurm allocations at PreviewManager init).
+_eval_kw = dict(serial_batches=True, isTrain=False, batch_size=1, nThreads=0)
 test_dataloader = data.create_dataloader(util.copyconf(opt, phase="test", **_eval_kw))
 val_dataloader = data.create_dataloader(util.copyconf(opt, phase="val", **_eval_kw))
 train_eval_dataloader = data.create_dataloader(
@@ -78,6 +85,28 @@ def _dataset_len(loader) -> int:
         return 0
 
 trainer = get_trainer(opt)
+
+# Optional OPAL + local LLM on generator updates (OPAL_ENABLE=1).
+_g_steps_per_batch = (
+    int(getattr(opt, "num_G_steps", 1))
+    if int(getattr(opt, "D_steps_per_G", 1)) > 0
+    else 0
+)
+# G.step fires when batch_index % num_F_steps_per_G == 0 (see run_generator_one_step).
+_f_div = max(1, int(getattr(opt, "num_F_steps_per_G", 1)))
+_batches_per_epoch = max(1, int(len(dataloader)))
+_g_updates_per_epoch = (_batches_per_epoch // max(1, int(getattr(opt, "D_steps_per_G", 1)))) * max(1, _g_steps_per_batch)
+# Rough: fraction of those that actually call optimizer_G.step
+_g_updates_per_epoch = max(1, (_g_updates_per_epoch + _f_div - 1) // _f_div)
+_total_g_updates = _g_updates_per_epoch * (int(opt.niter) + int(getattr(opt, "niter_decay", 0) or 0))
+try:
+    from cislnet.opal_hook import enable_opal, close_opal
+    enable_opal(trainer, opt, total_g_updates=_total_g_updates, run_dir=vcfg.output_dir)
+except Exception as _opal_exc:
+    if __import__("os").environ.get("OPAL_ENABLE", "0") == "1":
+        raise
+    print(f"[opal] skipped: {_opal_exc}")
+
 iter_counter = IterationCounter(opt, len(dataloader.dataset))
 visualizer = Visualizer(opt)
 tb = UnifiedTBLogger("cislnet", str(opt.name), run_dir=vcfg.output_dir)
@@ -126,7 +155,9 @@ def _eval_l1_lpips(trainer, loader, lpips_mod, max_batches: int = 0) -> tuple[fl
     return tot_l1 / denom, tot_lp / denom
 
 
+@torch.no_grad()
 def _preview_forward(fixed_batch):
+    """Inference-only preview on fixed test tiles (no grad / no optimizer step)."""
     trainer.model.eval()
     try:
         device = next(trainer.model.parameters()).device
@@ -138,9 +169,10 @@ def _preview_forward(fixed_batch):
     return fixed_batch["target"], fake
 
 
-# Frozen split has no val set (val.txt is empty; those samples are in test).
-# Preview on held-out test tiles when val is empty so we still lock 8 patches.
-_preview_loader = val_dataloader if _dataset_len(val_dataloader) > 0 else test_dataloader
+# Locked preview tiles come from the held-out **test** split (not train).
+# Same patches every epoch; across seeded runs the loader order is deterministic.
+# Fallback to val only if test is empty.
+_preview_loader = test_dataloader if _dataset_len(test_dataloader) > 0 else val_dataloader
 preview = PreviewManager(
     preview_loader=_preview_loader,
     out_dir=samples_dir,
@@ -204,6 +236,9 @@ for epoch in iter_counter.training_epochs():
         if i % opt.D_steps_per_G == 0:
             for _ in range(opt.num_G_steps):
                 trainer.run_generator_one_step(data_i, iter=i)
+        else:
+            # Stale G-step fake must not be reused on a different batch.
+            trainer.generated = None
 
         trainer.run_discriminator_one_step(data_i)
 
@@ -291,4 +326,9 @@ for epoch in iter_counter.training_epochs():
         trainer.save(f"{epoch}")
 
 print("Training was successfully finished.")
+try:
+    from cislnet.opal_hook import close_opal
+    close_opal(trainer)
+except Exception as _e:
+    print(f"[opal] close: {_e}")
 tb.close()

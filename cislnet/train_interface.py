@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional, Protocol, runtime_checkable
 
-VALID_CHANNEL_COUNTS = frozenset({3, 6, 10, 13})
+# IR-only: 1/3/5 (Vis+ band subsets) / 6/10. Vis+: 4=Vis+1, 6=Vis+3, 8=Vis+5. Full IR+VIS: 13.
+# VIS-only: 3 with num_ir_channels=0 (VIS_ONLY=1).
+VALID_CHANNEL_COUNTS = frozenset({1, 3, 4, 5, 6, 8, 10, 13})
 VALID_COLOR_SPACES = frozenset({"srgb", "linear"})
 VALID_LR_SCHEDULES = frozenset({"fixed", "cosine", "plateau"})
 VALID_OPTIMIZERS = frozenset({"adam", "adamw"})

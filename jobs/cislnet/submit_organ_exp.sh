@@ -56,7 +56,7 @@ TEST_EQ_EPOCHS="${TEST_EQ_EPOCHS:-${TEST_EPOCHS:-5,10,15,20,25,30}}"
 # Chain a second hop so walltime timeout can resume (afterany).
 TRAIN_CHAIN="${TRAIN_CHAIN:-1}"
 # Optional sbatch --time override for train jobs (e.g. 3-00:00:00).
-TRAIN_TIME="${TRAIN_TIME:-${SLURM_TIME_TRAIN:-71:00:00}}"
+TRAIN_TIME="${TRAIN_TIME:-${SLURM_TIME_TRAIN:-3-00:00:00}}"
 CHECKPOINTS_DIR="${CHECKPOINTS_DIR:-$VSLITE_ROOT/results/cislnet}"
 RESULTS_DIR="${RESULTS_DIR:-$CHECKPOINTS_DIR}"
 LOG_ROOT="${LOG_ROOT:-/u/akshahi2/logs}"

@@ -3,7 +3,6 @@
 #SBATCH --job-name=cn_ti4
 #SBATCH --partition=IllinoisComputes-GPU
 #SBATCH -A kf4-ic
-#SBATCH --exclude=ccc0387
 #SBATCH --gres=gpu:A100:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G

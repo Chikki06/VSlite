@@ -22,7 +22,9 @@ def _mirror_train_enabled() -> bool:
 class UnifiedTBLogger:
     """Wraps per-run and unified SummaryWriters with consistent tags."""
 
-    PREVIEW_GRID_TAG = "preview/fixed_val/grid"
+    PREVIEW_PAIR_TAG = "preview/fixed_test/p{idx:02d}"
+    # Back-compat alias for older docs / scripts.
+    PREVIEW_GRID_TAG = "preview/fixed_test/p00"
 
     def __init__(
         self,
@@ -84,14 +86,26 @@ class UnifiedTBLogger:
         self.log_scalar("lpips_convnext_tcga/val", val_lpips, epoch)
         self.log_scalar("lpips_convnext_tcga/test", test_lpips, epoch)
 
-    def log_preview_png(self, png_path: Union[str, Path], epoch: int) -> None:
-        """Log composite PNG for TensorBoard image slider (step = epoch)."""
-        im = Image.open(png_path).convert("RGB")
-        arr = np.array(im)
-        chw = torch.from_numpy(arr).permute(2, 0, 1).float() / 255.0
-        self._u_writer.add_image(self.PREVIEW_GRID_TAG, chw, int(epoch))
-        if self._per_run_writer is not None:
-            self._per_run_writer.add_image(self.PREVIEW_GRID_TAG, chw, int(epoch))
+    def log_preview_png(self, png_path: Union[str, Path], epoch: int, *, pair_idx: int = 0) -> None:
+        """Log a single pred|real pair PNG (step = epoch)."""
+        self.log_preview_pngs([png_path], epoch, start_idx=int(pair_idx))
+
+    def log_preview_pngs(
+        self,
+        png_paths: list[Union[str, Path]],
+        epoch: int,
+        *,
+        start_idx: int = 0,
+    ) -> None:
+        """Log pred|real pair PNGs for TensorBoard image slider (step = epoch)."""
+        for i, png_path in enumerate(png_paths):
+            im = Image.open(png_path).convert("RGB")
+            arr = np.array(im)
+            chw = torch.from_numpy(arr).permute(2, 0, 1).float() / 255.0
+            tag = self.PREVIEW_PAIR_TAG.format(idx=int(start_idx) + i)
+            self._u_writer.add_image(tag, chw, int(epoch))
+            if self._per_run_writer is not None:
+                self._per_run_writer.add_image(tag, chw, int(epoch))
 
     def log_early_stop(self, best_val: float, stopped_epoch: int) -> None:
         self.log_scalar("early_stop/best_val_l1", best_val, stopped_epoch)

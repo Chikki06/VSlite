@@ -358,13 +358,14 @@ def main():
         **_dataloader_kwargs(int(cfg.val_num_workers), device),
     )
 
-    # 8 fixed preview samples (deterministic) for the unified composite saver.
-    # Use a dedicated single-process loader so we do not spawn ``val_loader``
-    # workers here; keeping val workers alive for all of training alongside train
-    # workers roughly doubles DataLoader RSS on large-patch runs (Slurm OOM).
+    # 8 fixed held-out **test** tiles (deterministic) for pred|real pair PNGs.
+    # Dedicated single-process loader so we do not spawn eval workers here;
+    # keeping them alive for all of training alongside train workers roughly
+    # doubles DataLoader RSS on large-patch runs (Slurm OOM).
+    _preview_ds = test_ds if len(test_ds) > 0 else val_ds
     _preview_bs = min(int(cfg.batch_size), 8) if int(cfg.batch_size) > 0 else 1
     preview_loader = DataLoader(
-        val_ds,
+        _preview_ds,
         batch_size=max(1, _preview_bs),
         shuffle=False,
         pin_memory=False,
@@ -372,6 +373,7 @@ def main():
     total_iters = max(1, int(total_epochs) * int(len(train_loader)))
     should_save_image = make_iter_schedule(total_iters, target_saves=50)
 
+    @torch.no_grad()
     def _preview_forward(fixed_batch):
         was_train = G.training
         G.eval()

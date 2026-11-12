@@ -32,7 +32,7 @@ from organ_exp_schedule import (  # noqa: E402
 CKPT = ROOT / "results" / "cislnet"
 TEST = CKPT / "test"
 UNIFIED = ROOT / "results" / "unified" / "cislnet"
-OUT = ROOT / "results_figures"
+OUT = ROOT / "results_figures_organ"
 SCHED_JSON = ROOT / "dataset" / "organ_exp" / "iter_schedule.json"
 
 RUNS = {

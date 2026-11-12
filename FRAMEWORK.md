@@ -57,12 +57,21 @@ SwinGAN/Restormer use `base/` (not `baseline/`) for the no-attention variant.
 results/<model>/<run>/
   ckpt_latest.pth | latest_net_G.pth
   ckpt_best.pth                 # early-stop winner
-  samples/                      # epoch*_step* PNG grids
-  preview_tiles.json            # optional locked val tiles
+  samples/                      # epoch*_step*_pXX.png (pred|real pairs)
+  preview_tiles.json            # optional locked test tiles
   loss_log.txt, opt.txt, iter.txt
   tensorboard/                  # per-run (optional)
   curves/                       # post-hoc from unified TB
 ```
+
+### Training preview samples (required convention)
+
+During training, [`util/preview_manager.py`](util/preview_manager.py) + [`util/sample_grid.py`](util/sample_grid.py) save qualitative previews on a schedule (`util/save_schedule.py`):
+
+- **Source:** held-out **test** patches (not train). Locked once at init via [`util/fixed_preview.py`](util/fixed_preview.py) (`shuffle=False` / seed-dependent order, optional `PREVIEW_TILE_LIST`).
+- **Stability:** the same `N` patches (default 8) are reused every epoch and across seeded runs.
+- **Inference only:** `torch.no_grad()` + model `eval()`; never optimizer / gradient updates.
+- **Layout:** one PNG per pair, **left = generation (pred), right = real (target)**. Filenames: `epochEEE_stepSSSSSSSSS_pXX.png`.
 
 ## Output layout (test)
 
@@ -78,8 +87,8 @@ New models **must**:
 
 1. Build [`VSliteTrainConfig`](cislnet/train_interface.py) and call `validate_train_config()`.
 2. Log `meta/num_channels`, `meta/patch_size`, `meta/batch_size_effective` to unified TB.
-3. Use [`util/preview_manager.py`](util/preview_manager.py) on **val** tiles (8 fixed).
-4. Use [`util/tb_logger.py`](util/tb_logger.py) for scalars + `preview/fixed_val/grid` images (epoch step = slider).
+3. Use [`util/preview_manager.py`](util/preview_manager.py) on **test** tiles (8 fixed; pred|real pairs).
+4. Use [`util/tb_logger.py`](util/tb_logger.py) for scalars + `preview/fixed_test/pXX` images (epoch step = slider).
 5. Use [`util/early_stopping.py`](util/early_stopping.py) when `EARLY_STOP_PATIENCE > 0`.
 6. Expose all ablation env vars from `jobs/_lib/ablation.env.example`.
 
@@ -102,7 +111,7 @@ All stacks must honor:
 
 | Variable | Purpose |
 |----------|---------|
-| `NUM_CHANNELS` / `INPUT_NC` | 3, 6, 10, 13 |
+| `NUM_CHANNELS` / `INPUT_NC` | 3, 4, 6, 8, 10, 13 | IR-only 3/6/10; Vis+ 4/6/8 (`VISPLUS=1|3|5`); full IR+VIS 13 |
 | `PATCH_SIZE` / `IMG_SIZE` | Patch spatial size |
 | `BATCH_SIZE` | Micro-batch |
 | `GRAD_ACCUM_STEPS` | Effective batch multiplier |

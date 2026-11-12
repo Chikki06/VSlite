@@ -427,6 +427,7 @@ class BaseOptions:
             opt.convnext_loss = not opt.no_convnext_loss
             opt.vgg_loss = opt.convnext_loss
             opt.L1_loss = not opt.no_L1_loss
+            opt.L2_loss = not opt.no_L2_loss
             opt.contrastive_loss = not opt.no_contrastive_loss
             if getattr(opt, 'perceptual_encoder', 'vgg') == 'vgg':
                 opt.perceptual_encoder = 'convnext'

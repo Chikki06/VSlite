@@ -127,13 +127,9 @@ def register_bbdm_vs_runner() -> None:
             reals = split_batch_to_list(x.detach().cpu())[:8]
             preds = split_batch_to_list(sample)[:8]
             name = f"epoch{epoch:03d}_step{int(self.global_step):09d}"
-            save_unified_sample(self._samples_dir, name, reals, preds)
-            if self._tb is not None:
-                from pathlib import Path
-
-                png = Path(self._samples_dir) / f"{name}.png"
-                if png.is_file():
-                    self._tb.log_preview_png(png, epoch)
+            paths = save_unified_sample(self._samples_dir, name, reals, preds)
+            if self._tb is not None and paths:
+                self._tb.log_preview_pngs(paths, epoch)
 
             if self._run_logger is not None:
                 self._run_logger.write_iter(epoch, int(self.global_step))
