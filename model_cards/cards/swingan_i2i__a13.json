@@ -1,0 +1,166 @@
+{
+  "schema_version": "1.0.0",
+  "id": "swingan_i2i__a13",
+  "family": "swingan_i2i",
+  "run": "a13",
+  "display_name": "swingan_i2i/a13",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model swingan_i2i/a13",
+  "tags": [
+    "a13",
+    "i2i",
+    "in10",
+    "swingan_i2i"
+  ],
+  "architecture": {
+    "extras": {
+      "embed_dim": 96,
+      "depths": "[2, 2, 6, 2]",
+      "num_heads": "[3, 6, 12, 24]",
+      "window_size": 8,
+      "discriminator_variant": "default"
+    },
+    "name": "ProjectedSwinUnet",
+    "backbone": "swin_tiny",
+    "attention": "cbam"
+  },
+  "io": {
+    "input_channels": 10,
+    "input_mode": "ir10",
+    "output_channels": 3,
+    "train_resolution": 512,
+    "infer_resolution": 512,
+    "color_space": "minus1_1",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 50,
+    "epochs_completed": 50,
+    "batch_size": 32,
+    "grad_accum": 1,
+    "effective_batch": 32,
+    "lr": 0.0002,
+    "optimizer": null,
+    "dataroot": null,
+    "seed": 1337,
+    "losses": {
+      "lambda_gan": 1.0,
+      "lambda_l1": 100.0,
+      "lambda_perceptual": 10.0,
+      "perceptual": true,
+      "gan": true
+    },
+    "hypers": {
+      "ape": false,
+      "depths": "[2, 2, 6, 2]",
+      "discriminator_variant": "default",
+      "drop_path_rate": 0.1,
+      "drop_rate": 0.0,
+      "embed_dim": 96,
+      "epochs_n": 50,
+      "he_scale": "minus1_1",
+      "input_mode": "ir10",
+      "lr_d": 0.0002,
+      "max_items": null,
+      "mlp_ratio": 4.0,
+      "num_heads": "[3, 6, 12, 24]",
+      "num_ir_channels": 10,
+      "patch_norm": true,
+      "patch_size": 4,
+      "pretrained_swin_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/SwinGAN/pretrained_ckpt/swin_tiny_patch4_window7_224.pth",
+      "print_freq": 100,
+      "qk_scale": null,
+      "qkv_bias": true,
+      "split": "train",
+      "split_fracs": "[0.9, 0.05, 0.05]",
+      "split_seed": 1337,
+      "tcga_feature_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/tcga_tl_checkpoints/convnext_t_dp_spv_supcon_1e-5",
+      "train_num_workers": 16,
+      "use_cbam": true,
+      "use_checkpoint": false,
+      "val_num_workers": 4,
+      "window_size": 8
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/swingan_i2i/a13/ckpt_latest.pth",
+    "kind": "latest",
+    "epoch": 50,
+    "bytes": 543224665,
+    "sha256": null,
+    "companions": []
+  },
+  "evals": [
+    {
+      "id": "test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/swingan_i2i/test/a13/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.44372315866269,
+        "psnr_std": 3.7154335307985704,
+        "ssim_mean": 0.3780651579044199,
+        "ssim_std": 0.17369201054847774,
+        "fid": 23.608005489317563,
+        "lpips_convnext_tcga_mean": 0.0022962007037554298,
+        "lpips_convnext_tcga_std": 0.0007038937131224773
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0022962007037554298,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "train",
+      "split": "train",
+      "test_set": null,
+      "n": 60047,
+      "region": null,
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/swingan_i2i/test/a13/patch_eval_train/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.857268939557986,
+        "psnr_std": 3.252854141714851,
+        "ssim_mean": 0.3525599869358389,
+        "ssim_std": 0.17645628985920625,
+        "fid": 22.173696076142278
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 22.173696076142278,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.0022962007037554298,
+  "links": {
+    "wsi_pred": "results/swingan_i2i/test/a13/wsi_pred",
+    "samples": "results/swingan_i2i/a13/samples"
+  },
+  "extensions": {
+    "config_yaml": "results/swingan_i2i/a13/config.yaml"
+  },
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/swingan_i2i/a13/ckpt_latest.pth",
+      "results/swingan_i2i/a13/config.yaml",
+      "results/swingan_i2i/a13/iter.txt",
+      "results/swingan_i2i/a13/opt.txt",
+      "results/swingan_i2i/test/a13/patch_eval_test/metrics.json",
+      "results/swingan_i2i/test/a13/patch_eval_train/metrics.json"
+    ]
+  }
+}

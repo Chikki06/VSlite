@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "id": "tcga_encoder__enc_smoke_supcon_fix",
+  "family": "tcga_encoder",
+  "run": "enc_smoke_supcon_fix",
+  "display_name": "tcga_encoder/enc_smoke_supcon_fix",
+  "task": "encoder",
+  "status": "smoke",
+  "summary": "encoder model tcga_encoder/enc_smoke_supcon_fix",
+  "tags": [
+    "enc_smoke_supcon_fix",
+    "encoder",
+    "in3",
+    "smoke",
+    "tcga_encoder"
+  ],
+  "architecture": {
+    "extras": {},
+    "name": "convnext_t",
+    "backbone": "convnext_t"
+  },
+  "io": {
+    "train_resolution": 256,
+    "infer_resolution": 256,
+    "input_channels": 3,
+    "output_channels": null
+  },
+  "training": {
+    "epochs_planned": 2,
+    "epochs_completed": 2,
+    "batch_size": 64,
+    "grad_accum": 1,
+    "effective_batch": 64,
+    "lr": 0.5,
+    "optimizer": "sgd",
+    "dataroot": null,
+    "seed": null,
+    "losses": {
+      "supcon_temperature": 0.1
+    },
+    "hypers": {
+      "arch": "convnext_t",
+      "optimizer": "sgd",
+      "weight_decay": 0.0001,
+      "temperature": 0.1,
+      "head_dim": 128,
+      "head_hidden": 2048,
+      "epochs": 2,
+      "warmup_epochs": 10,
+      "manifest": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/tcga_ut/manifest.csv",
+      "extract_dir": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/tcga_ut/extracted",
+      "res_filter": "",
+      "save_epoch_freq": 5,
+      "num_workers": 4,
+      "seed": 0,
+      "print_freq": 50,
+      "knn_freq": 10,
+      "knn_train_bank": 65536,
+      "knn_val_max": 8192,
+      "limit_train": 2048,
+      "smoke": true
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/tcga_encoder/enc_smoke_supcon_fix/ckpt_latest.pth",
+    "kind": "latest",
+    "epoch": 2,
+    "bytes": 237388367,
+    "sha256": null,
+    "companions": []
+  },
+  "evals": [],
+  "primary_lpips": null,
+  "links": {},
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/tcga_encoder/enc_smoke_supcon_fix/ckpt_latest.pth",
+      "results/tcga_encoder/enc_smoke_supcon_fix/iter.txt",
+      "results/tcga_encoder/enc_smoke_supcon_fix/opt.txt"
+    ]
+  }
+}

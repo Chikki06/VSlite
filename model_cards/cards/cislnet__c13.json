@@ -1,0 +1,372 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c13",
+  "family": "cislnet",
+  "run": "c13",
+  "display_name": "cislnet/c13",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model cislnet/c13",
+  "tags": [
+    "c13",
+    "cislnet",
+    "i2i",
+    "in13"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 35,
+    "epochs_completed": 25,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": true,
+      "nce": true,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_nce": 10.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "aspect_ratio": 1.0,
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": false,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false,
+      "load_size": 1024,
+      "max_dataset_size": 9223372036854775807,
+      "model": "contrastive_pix2pix",
+      "nThreads": 4,
+      "n_layers_D": 4,
+      "nce_fake_negatives": true
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c13/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 25,
+    "bytes": 346293107,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c13/latest_net_D.pth",
+      "results/cislnet/c13/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [
+    {
+      "id": "quant_fp16_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6897,
+      "region": null,
+      "quantization": "fp16",
+      "epoch": null,
+      "metrics_path": "results/cislnet/quant/c13/test/fp16/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.994601602501607,
+        "psnr_std": 4.055249126630101,
+        "ssim_mean": 0.4593299627914426,
+        "ssim_std": 0.1794966964151393,
+        "fid": 6.10259486736993,
+        "extras": {
+          "quant_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/cislnet/quant/c13/fp16/net_G_fp16.pt",
+          "inference_batch_size": 16,
+          "inference_warmup_batches": 2,
+          "inference_time_per_patch_mean_sec": 0.009525130397317574,
+          "inference_time_per_patch_std_sec": 0.004335962425673801,
+          "inference_time_per_patch_p50_sec": 0.009466775882174261,
+          "inference_time_per_patch_p95_sec": 0.009582726692315191,
+          "inference_time_per_patch_n": 6897,
+          "inference_time_per_sample_mean_sec": 0.1520713526627299,
+          "inference_time_per_sample_std_sec": 0.010526860691531675,
+          "inference_time_per_sample_p50_sec": 0.1514696910744533,
+          "inference_time_per_sample_p95_sec": 0.15334431309020147,
+          "inference_time_per_sample_n": 432
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 6.10259486736993,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "quant_fp4_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": "fp4",
+      "epoch": null,
+      "metrics_path": "results/cislnet/quant/c13/test/fp4/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 9.747359173114832,
+        "psnr_std": 1.354790402297195,
+        "ssim_mean": 0.485057114047274,
+        "ssim_std": 0.1446904192647877,
+        "fid": 138.71902107964624,
+        "extras": {
+          "quant_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/cislnet/quant/c13/fp4/net_G_fp4.pt"
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 138.71902107964624,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "quant_fp8_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6865,
+      "region": null,
+      "quantization": "fp8",
+      "epoch": null,
+      "metrics_path": "results/cislnet/quant/c13/test/fp8/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.98899063931158,
+        "psnr_std": 4.051841959380311,
+        "ssim_mean": 0.4591721188274293,
+        "ssim_std": 0.17848645652580822,
+        "fid": 5.805869405359402,
+        "extras": {
+          "quant_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/cislnet/quant/c13/fp8/net_G_fp8.pt",
+          "inference_batch_size": 32,
+          "inference_warmup_batches": 2,
+          "inference_time_per_patch_mean_sec": 0.014726070392278592,
+          "inference_time_per_patch_std_sec": 0.014743586079523344,
+          "inference_time_per_patch_p50_sec": 0.013991949686896987,
+          "inference_time_per_patch_p95_sec": 0.014116549151367508,
+          "inference_time_per_patch_n": 6865,
+          "inference_time_per_sample_mean_sec": 0.47020685229298853,
+          "inference_time_per_sample_std_sec": 0.3288512621544928,
+          "inference_time_per_sample_p50_sec": 0.4477423899807036,
+          "inference_time_per_sample_p95_sec": 0.451745338505134,
+          "inference_time_per_sample_n": 215
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 5.805869405359402,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "quant_int32_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6897,
+      "region": null,
+      "quantization": "int32",
+      "epoch": null,
+      "metrics_path": "results/cislnet/quant/c13/test/int32/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.987696082412217,
+        "psnr_std": 4.0260129753435985,
+        "ssim_mean": 0.45918039393235727,
+        "ssim_std": 0.17939772685887448,
+        "fid": 6.077422898553266,
+        "extras": {
+          "quant_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/cislnet/quant/c13/int32/net_G_int32.pt",
+          "inference_batch_size": 16,
+          "inference_warmup_batches": 2,
+          "inference_time_per_patch_mean_sec": 0.01197121491060482,
+          "inference_time_per_patch_std_sec": 0.005910437183315709,
+          "inference_time_per_patch_p50_sec": 0.011896609750692733,
+          "inference_time_per_patch_p95_sec": 0.0119348776206607,
+          "inference_time_per_patch_n": 6897,
+          "inference_time_per_sample_mean_sec": 0.1911237713852811,
+          "inference_time_per_sample_std_sec": 0.015015270484332226,
+          "inference_time_per_sample_p50_sec": 0.19034622551407665,
+          "inference_time_per_sample_p95_sec": 0.19097947896225378,
+          "inference_time_per_sample_n": 432
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 6.077422898553266,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "quant_int4_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6897,
+      "region": null,
+      "quantization": "int4",
+      "epoch": null,
+      "metrics_path": "results/cislnet/quant/c13/test/int4/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.816699402083007,
+        "psnr_std": 2.459212685628649,
+        "ssim_mean": 0.3326466420763417,
+        "ssim_std": 0.13357751718756852,
+        "fid": 75.17418686765136,
+        "extras": {
+          "quant_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/cislnet/quant/c13/int4/net_G_int4.pt",
+          "inference_batch_size": 16,
+          "inference_warmup_batches": 2,
+          "inference_time_per_patch_mean_sec": 0.02452424103031587,
+          "inference_time_per_patch_std_sec": 0.04294381965837499,
+          "inference_time_per_patch_p50_sec": 0.02390856549027376,
+          "inference_time_per_patch_p95_sec": 0.024343783690710552,
+          "inference_time_per_patch_n": 6897,
+          "inference_time_per_sample_mean_sec": 0.391536320338168,
+          "inference_time_per_sample_std_sec": 0.15417409822867445,
+          "inference_time_per_sample_p50_sec": 0.3825593078508973,
+          "inference_time_per_sample_p95_sec": 0.3895605389145203,
+          "inference_time_per_sample_n": 432
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 75.17418686765136,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "quant_int8_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6865,
+      "region": null,
+      "quantization": "int8",
+      "epoch": null,
+      "metrics_path": "results/cislnet/quant/c13/test/int8/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.017218140648776,
+        "psnr_std": 4.00245884696312,
+        "ssim_mean": 0.45815454842353165,
+        "ssim_std": 0.17876322928846278,
+        "fid": 5.814107850857667,
+        "extras": {
+          "quant_ckpt": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/cislnet/quant/c13/int8/net_G_int8.pt",
+          "inference_batch_size": 32,
+          "inference_warmup_batches": 2,
+          "inference_time_per_patch_mean_sec": 0.02357559107099534,
+          "inference_time_per_patch_std_sec": 0.02965367631865537,
+          "inference_time_per_patch_p50_sec": 0.022090654812927824,
+          "inference_time_per_patch_p95_sec": 0.022163168410770595,
+          "inference_time_per_patch_n": 6865,
+          "inference_time_per_sample_mean_sec": 0.7527741055924791,
+          "inference_time_per_sample_std_sec": 0.6675757055986754,
+          "inference_time_per_sample_p50_sec": 0.7069009540136904,
+          "inference_time_per_sample_p95_sec": 0.7092519068857654,
+          "inference_time_per_sample_n": 215
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 5.814107850857667,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.08975577620207,
+        "psnr_std": 3.6493340545878232,
+        "ssim_mean": 0.4663507392527024,
+        "ssim_std": 0.17933792220897046,
+        "fid": 5.842935861941754,
+        "lpips_convnext_tcga_mean": 0.0018188091083133433,
+        "lpips_convnext_tcga_std": 0.0006739433051030921
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0018188091083133433,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.0018188091083133433,
+  "links": {
+    "wsi_pred": "results/cislnet/test/c13/wsi_pred",
+    "samples": "results/cislnet/c13/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c13/iter.txt",
+      "results/cislnet/c13/latest_net_G.pth",
+      "results/cislnet/c13/opt.txt",
+      "results/cislnet/quant/c13/test/fp16/patch_eval_test/metrics.json",
+      "results/cislnet/quant/c13/test/fp4/patch_eval_test/metrics.json",
+      "results/cislnet/quant/c13/test/fp8/patch_eval_test/metrics.json",
+      "results/cislnet/quant/c13/test/int32/patch_eval_test/metrics.json",
+      "results/cislnet/quant/c13/test/int4/patch_eval_test/metrics.json",
+      "results/cislnet/quant/c13/test/int8/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13/patch_eval_test/metrics.json"
+    ]
+  }
+}

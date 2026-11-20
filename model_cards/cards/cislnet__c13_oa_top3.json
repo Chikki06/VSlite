@@ -1,0 +1,787 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c13_oa_top3",
+  "family": "cislnet",
+  "run": "c13_oa_top3",
+  "display_name": "cislnet/c13_oa_top3",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model cislnet/c13_oa_top3",
+  "tags": [
+    "c13_oa_top3",
+    "cislnet",
+    "i2i",
+    "in13"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 59,
+    "epochs_completed": 60,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": true,
+      "nce": true,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_nce": 10.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "aspect_ratio": 1.0,
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": true,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false,
+      "load_size": 1024,
+      "max_dataset_size": 9223372036854775807,
+      "model": "contrastive_pix2pix",
+      "nThreads": 4,
+      "n_layers_D": 4,
+      "nce_fake_negatives": true
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c13_oa_top3/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 60,
+    "bytes": 346294995,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c13_oa_top3/latest_net_D.pth",
+      "results/cislnet/c13_oa_top3/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [
+    {
+      "id": "hold_kidney_10_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_10",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.926583987154007,
+        "psnr_std": 2.96841671411199,
+        "ssim_mean": 0.32121107351990436,
+        "ssim_std": 0.174723331093966,
+        "fid": 16.570309817901816,
+        "lpips_convnext_tcga_mean": 0.0024192396688342576,
+        "lpips_convnext_tcga_std": 0.0007217093589996198
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0024192396688342576,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_15_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_15",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_15/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.3632558341343,
+        "psnr_std": 2.9103829219650854,
+        "ssim_mean": 0.3459558825030498,
+        "ssim_std": 0.17070451180904725,
+        "fid": 11.855087145433899
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 11.855087145433899,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_20_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_20",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_20/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.442846501113504,
+        "psnr_std": 2.992705075595675,
+        "ssim_mean": 0.35133622980490786,
+        "ssim_std": 0.17947409789337404,
+        "fid": 9.837930262681766,
+        "lpips_convnext_tcga_mean": 0.0023689906377669335,
+        "lpips_convnext_tcga_std": 0.0007497136006362112
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023689906377669335,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_25_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_25",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_25/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.05309784732141,
+        "psnr_std": 2.8244491933679297,
+        "ssim_mean": 0.3236529123051902,
+        "ssim_std": 0.1673474538474069,
+        "fid": 11.572864776807734
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 11.572864776807734,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_30_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_30",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_30/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.19747820199183,
+        "psnr_std": 2.7369141682796108,
+        "ssim_mean": 0.33701827846088966,
+        "ssim_std": 0.16595912484747602,
+        "fid": 9.091682235557286,
+        "lpips_convnext_tcga_mean": 0.002378568285643418,
+        "lpips_convnext_tcga_std": 0.0006877336315294623
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.002378568285643418,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_39_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_39",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_39/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 9.254793125997258,
+        "psnr_std": 0.9734453969824924,
+        "ssim_mean": 0.3881167444265465,
+        "ssim_std": 0.1286210333942719,
+        "fid": 127.44519152002178,
+        "lpips_convnext_tcga_mean": 0.005113020576502037,
+        "lpips_convnext_tcga_std": 0.0005960185490091108
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.005113020576502037,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_49_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_49",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_49/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 9.25479316191418,
+        "psnr_std": 0.9734453627742696,
+        "ssim_mean": 0.38811674558983417,
+        "ssim_std": 0.12862103293402707,
+        "fid": 127.5977153350366,
+        "lpips_convnext_tcga_mean": 0.005113109071188532,
+        "lpips_convnext_tcga_std": 0.0005959102097081428
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.005113109071188532,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_5_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_5",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_5/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.782651674473698,
+        "psnr_std": 3.0290262953972813,
+        "ssim_mean": 0.31952059044603076,
+        "ssim_std": 0.1755114819532846,
+        "fid": 17.035400441872383
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 17.035400441872383,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_59_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_59",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_kidney_59/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.38662516007221,
+        "psnr_std": 3.0514748802580436,
+        "ssim_mean": 0.3373777868394663,
+        "ssim_std": 0.17973283480828284,
+        "fid": 12.02675542802703,
+        "lpips_convnext_tcga_mean": 0.0023653570665672654,
+        "lpips_convnext_tcga_std": 0.0007373106619245447
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023653570665672654,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_10_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_10",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.806019205739595,
+        "psnr_std": 2.1958415809772465,
+        "ssim_mean": 0.4109787911101518,
+        "ssim_std": 0.12550468249267008,
+        "fid": 6.12810496089385,
+        "lpips_convnext_tcga_mean": 0.0019291542386923868,
+        "lpips_convnext_tcga_std": 0.0004338662629753698
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0019291542386923868,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_15_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_15",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_15/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.22626628216151,
+        "psnr_std": 2.3399861380115388,
+        "ssim_mean": 0.43804823624901085,
+        "ssim_std": 0.12867072534605542,
+        "fid": 6.568390107522248
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 6.568390107522248,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_20_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_20",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_20/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.345160232983666,
+        "psnr_std": 2.5067673742663046,
+        "ssim_mean": 0.45224488591724404,
+        "ssim_std": 0.13270757999119315,
+        "fid": 5.746487970114018,
+        "lpips_convnext_tcga_mean": 0.0018603992629338262,
+        "lpips_convnext_tcga_std": 0.00047640576566458653
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0018603992629338262,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_25_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_25",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_25/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.74172806229775,
+        "psnr_std": 2.159960019504469,
+        "ssim_mean": 0.41311089839659454,
+        "ssim_std": 0.12813491401712887,
+        "fid": 6.33791657403853
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 6.33791657403853,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_30_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_30",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_30/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.999521673420066,
+        "psnr_std": 2.2527728491642343,
+        "ssim_mean": 0.43017966983453876,
+        "ssim_std": 0.13078301314045596,
+        "fid": 3.596120415766009,
+        "lpips_convnext_tcga_mean": 0.0019102646459018087,
+        "lpips_convnext_tcga_std": 0.00045500112236719213
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0019102646459018087,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_39_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_39",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_39/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 9.239299786573705,
+        "psnr_std": 0.9674996465815012,
+        "ssim_mean": 0.45851786188803184,
+        "ssim_std": 0.10686655594748712,
+        "fid": 161.69619876734203,
+        "lpips_convnext_tcga_mean": 0.004844694391296989,
+        "lpips_convnext_tcga_std": 0.00047808566983066045
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.004844694391296989,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_49_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_49",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_49/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 9.239299740306354,
+        "psnr_std": 0.9674996738535937,
+        "ssim_mean": 0.45851786205714967,
+        "ssim_std": 0.10686655564949729,
+        "fid": 161.86170792026823,
+        "lpips_convnext_tcga_mean": 0.0048446858849043,
+        "lpips_convnext_tcga_std": 0.00047768006913572787
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0048446858849043,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_5_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_5",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_5/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.666409005814042,
+        "psnr_std": 2.1709948790570857,
+        "ssim_mean": 0.40811906774544376,
+        "ssim_std": 0.12473799479333826,
+        "fid": 6.950534940866774
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 6.950534940866774,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_59_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_59",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_prostate_59/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.036482540448883,
+        "psnr_std": 2.2747562771620733,
+        "ssim_mean": 0.4296675214012314,
+        "ssim_std": 0.13304939579233435,
+        "fid": 4.702433570946923,
+        "lpips_convnext_tcga_mean": 0.0019031504674649423,
+        "lpips_convnext_tcga_std": 0.0004625592614626014
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0019031504674649423,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_10_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_10",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.52772728994088,
+        "psnr_std": 3.044964426895742,
+        "ssim_mean": 0.3420993827255685,
+        "ssim_std": 0.1612447833886546,
+        "fid": 32.68154331210802,
+        "lpips_convnext_tcga_mean": 0.0022729652443447164,
+        "lpips_convnext_tcga_std": 0.0008237814779878622
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0022729652443447164,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_15_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_15",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_15/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.76508835161436,
+        "psnr_std": 3.109993094645453,
+        "ssim_mean": 0.3591088420368703,
+        "ssim_std": 0.15859571759195065,
+        "fid": 42.92246622225528
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 42.92246622225528,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_20_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_20",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_20/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.79926355731973,
+        "psnr_std": 3.234275812766195,
+        "ssim_mean": 0.3579318342127986,
+        "ssim_std": 0.16710869757244545,
+        "fid": 33.11136151186635,
+        "lpips_convnext_tcga_mean": 0.002279265887429852,
+        "lpips_convnext_tcga_std": 0.0008525986498375879
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.002279265887429852,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_25_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_25",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_25/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.278929014549423,
+        "psnr_std": 2.9788568664417108,
+        "ssim_mean": 0.3276001990090737,
+        "ssim_std": 0.16426635375264823,
+        "fid": 25.053320459607335
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 25.053320459607335,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_30_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_30",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_30/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.47451121601006,
+        "psnr_std": 3.1165973980733295,
+        "ssim_mean": 0.3423129133326192,
+        "ssim_std": 0.1653308162497209,
+        "fid": 19.14983958298791,
+        "lpips_convnext_tcga_mean": 0.0023119343678076627,
+        "lpips_convnext_tcga_std": 0.0008485506860454113
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023119343678076627,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_39_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_39",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_39/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 9.72995642751752,
+        "psnr_std": 1.312678466078862,
+        "ssim_mean": 0.3715345238692034,
+        "ssim_std": 0.14106466582466995,
+        "fid": 117.3233006406588,
+        "lpips_convnext_tcga_mean": 0.005050225588441114,
+        "lpips_convnext_tcga_std": 0.0005433587588325737
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.005050225588441114,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_49_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_49",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_49/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 9.72995645668848,
+        "psnr_std": 1.3126784959114108,
+        "ssim_mean": 0.37153452342604615,
+        "ssim_std": 0.14106466604661508,
+        "fid": 116.54621435053194,
+        "lpips_convnext_tcga_mean": 0.005050465174635605,
+        "lpips_convnext_tcga_std": 0.0005439596382127304
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.005050465174635605,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_5_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_5",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_5/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.304499860314152,
+        "psnr_std": 3.010889459395582,
+        "ssim_mean": 0.3303459305662426,
+        "ssim_std": 0.15412791305257809,
+        "fid": 43.35531103794369
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 43.35531103794369,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_59_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_59",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_oa_top3__hold_uterus_59/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.406253769284184,
+        "psnr_std": 2.9036743478851683,
+        "ssim_mean": 0.33984165568057045,
+        "ssim_std": 0.16323439230800485,
+        "fid": 36.36989877266306,
+        "lpips_convnext_tcga_mean": 0.0023334223944646176,
+        "lpips_convnext_tcga_std": 0.0008296549854366592
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023334223944646176,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.0024192396688342576,
+  "links": {
+    "samples": "results/cislnet/c13_oa_top3/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c13_oa_top3/iter.txt",
+      "results/cislnet/c13_oa_top3/latest_net_G.pth",
+      "results/cislnet/c13_oa_top3/opt.txt",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_15/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_20/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_25/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_30/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_39/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_49/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_5/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_kidney_59/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_15/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_20/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_25/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_30/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_39/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_49/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_5/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_prostate_59/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_15/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_20/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_25/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_30/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_39/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_49/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_5/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_oa_top3__hold_uterus_59/patch_eval_test/metrics.json"
+    ]
+  }
+}

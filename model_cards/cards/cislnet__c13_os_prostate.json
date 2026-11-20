@@ -1,0 +1,395 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c13_os_prostate",
+  "family": "cislnet",
+  "run": "c13_os_prostate",
+  "display_name": "cislnet/c13_os_prostate",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model cislnet/c13_os_prostate",
+  "tags": [
+    "c13_os_prostate",
+    "cislnet",
+    "i2i",
+    "in13"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 93,
+    "epochs_completed": 94,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": true,
+      "nce": true,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_nce": 10.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "aspect_ratio": 1.0,
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": true,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false,
+      "load_size": 1024,
+      "max_dataset_size": 9223372036854775807,
+      "model": "contrastive_pix2pix",
+      "nThreads": 4,
+      "n_layers_D": 4,
+      "nce_fake_negatives": true
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c13_os_prostate/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 94,
+    "bytes": 346294995,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c13_os_prostate/latest_net_D.pth",
+      "results/cislnet/c13_os_prostate/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [
+    {
+      "id": "hold_prostate_10_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_10",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.968648004366027,
+        "psnr_std": 2.472918038511153,
+        "ssim_mean": 0.43470286368265176,
+        "ssim_std": 0.12524846106687113,
+        "fid": 7.295336363037748
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 7.295336363037748,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_15_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_15",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_15/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.815660405231956,
+        "psnr_std": 2.1910962743446727,
+        "ssim_mean": 0.42026450610733324,
+        "ssim_std": 0.12799959470653757,
+        "fid": 6.277932384530075,
+        "lpips_convnext_tcga_mean": 0.001928941059263346,
+        "lpips_convnext_tcga_std": 0.0004377253100002792
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.001928941059263346,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_20_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_20",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_20/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.860150781437163,
+        "psnr_std": 2.1829215360361713,
+        "ssim_mean": 0.42276548972246075,
+        "ssim_std": 0.12857779750843654,
+        "fid": 4.422904892775875
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 4.422904892775875,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_25_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_25",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_25/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.22679989580377,
+        "psnr_std": 2.438315963931738,
+        "ssim_mean": 0.4433972936682638,
+        "ssim_std": 0.1319961955747278,
+        "fid": 4.490681163471663
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 4.490681163471663,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_30_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_30",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_30/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.17008994443043,
+        "psnr_std": 2.3495605225078857,
+        "ssim_mean": 0.4387793871219818,
+        "ssim_std": 0.13149938132312428,
+        "fid": 6.087877983673451
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 6.087877983673451,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_31_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_31",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_31/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.027950891302552,
+        "psnr_std": 2.360035016068984,
+        "ssim_mean": 0.4335570934848306,
+        "ssim_std": 0.13119116411269047,
+        "fid": 6.008517859356488,
+        "lpips_convnext_tcga_mean": 0.001917068976591824,
+        "lpips_convnext_tcga_std": 0.00046460112871315134
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.001917068976591824,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_46_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_46",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_46/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.373761937029567,
+        "psnr_std": 2.3256388003944406,
+        "ssim_mean": 0.43997972806701896,
+        "ssim_std": 0.13231084633137988,
+        "fid": 5.408666804591405,
+        "lpips_convnext_tcga_mean": 0.0018447790160902792,
+        "lpips_convnext_tcga_std": 0.00044368355286247027
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0018447790160902792,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_5_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_5",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_5/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.422079955378347,
+        "psnr_std": 2.0455166809978778,
+        "ssim_mean": 0.4075479669267012,
+        "ssim_std": 0.12196113342893149,
+        "fid": 10.237515830060516
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 10.237515830060516,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_62_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_62",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_62/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.239295996877768,
+        "psnr_std": 2.4333042803666083,
+        "ssim_mean": 0.44397461154240175,
+        "ssim_std": 0.13282934645893582,
+        "fid": 4.92407806588308,
+        "lpips_convnext_tcga_mean": 0.0018535359752724207,
+        "lpips_convnext_tcga_std": 0.0004606881270620805
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0018535359752724207,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_77_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_77",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_77/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.325040098262246,
+        "psnr_std": 2.4428345862308394,
+        "ssim_mean": 0.44175987206665646,
+        "ssim_std": 0.1351737518128104,
+        "fid": 3.6364295241304774,
+        "lpips_convnext_tcga_mean": 0.0018464874244195613,
+        "lpips_convnext_tcga_std": 0.0004691370704684792
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0018464874244195613,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_prostate_93_test",
+      "split": "test",
+      "test_set": null,
+      "n": 2379,
+      "region": "prostate_93",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_prostate__hold_prostate_93/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.35472778636716,
+        "psnr_std": 2.455429982426273,
+        "ssim_mean": 0.452231993321713,
+        "ssim_std": 0.13624859971742434,
+        "fid": 3.9200103700124487,
+        "lpips_convnext_tcga_mean": 0.0018177581897928115,
+        "lpips_convnext_tcga_std": 0.0004656877442421738
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0018177581897928115,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.001928941059263346,
+  "links": {
+    "samples": "results/cislnet/c13_os_prostate/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c13_os_prostate/iter.txt",
+      "results/cislnet/c13_os_prostate/latest_net_G.pth",
+      "results/cislnet/c13_os_prostate/opt.txt",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_15/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_20/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_25/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_30/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_31/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_46/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_5/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_62/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_77/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_prostate__hold_prostate_93/patch_eval_test/metrics.json"
+    ]
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c13_opal",
+  "family": "cislnet",
+  "run": "c13_opal",
+  "display_name": "cislnet/c13_opal",
+  "task": "i2i",
+  "status": "draft",
+  "summary": "i2i model cislnet/c13_opal",
+  "tags": [
+    "c13_opal",
+    "cislnet",
+    "i2i",
+    "in13"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 30,
+    "epochs_completed": 26,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": true,
+      "nce": true,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_l2": 1.0,
+      "lambda_nce": 10.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "L2_loss": false,
+      "aspect_ratio": 1.0,
+      "attention_type": "cbam",
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": true,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "decoder_conv": "standard",
+      "decoder_width_mult": 1.0,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "encoder_backbone": "resnet50",
+      "encoder_width_mult": 1.0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c13_opal/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 26,
+    "bytes": 346294995,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c13_opal/latest_net_D.pth",
+      "results/cislnet/c13_opal/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [],
+  "primary_lpips": null,
+  "links": {
+    "samples": "results/cislnet/c13_opal/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c13_opal/iter.txt",
+      "results/cislnet/c13_opal/latest_net_G.pth",
+      "results/cislnet/c13_opal/opt.txt"
+    ]
+  }
+}

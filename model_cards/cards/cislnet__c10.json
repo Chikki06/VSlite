@@ -1,0 +1,327 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c10",
+  "family": "cislnet",
+  "run": "c10",
+  "display_name": "cislnet/c10",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model cislnet/c10",
+  "tags": [
+    "c10",
+    "cislnet",
+    "i2i",
+    "in10"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 10,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 30,
+    "epochs_completed": 31,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": true,
+      "nce": true,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_l2": 1.0,
+      "lambda_nce": 10.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "L2_loss": false,
+      "aspect_ratio": 1.0,
+      "attention_type": "cbam",
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": true,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "decoder_conv": "standard",
+      "decoder_width_mult": 1.0,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "encoder_backbone": "resnet50",
+      "encoder_width_mult": 1.0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c10/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 31,
+    "bytes": 346257363,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c10/latest_net_D.pth",
+      "results/cislnet/c10/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [
+    {
+      "id": "test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.408826355350413,
+        "psnr_std": 3.7514028600488025,
+        "ssim_mean": 0.43305332038908023,
+        "ssim_std": 0.1813134883260539,
+        "fid": 7.043036857474476,
+        "lpips_convnext_tcga_mean": 0.001973534494321017,
+        "lpips_convnext_tcga_std": 0.0006997290745392689,
+        "extras": {
+          "lpips_vgg_mean": 0.4540932210067389,
+          "lpips_vgg_std": 0.04493332808690588,
+          "latency_ms_mean": 46.623919289559126,
+          "latency_ms_std": 0.0800663286333993,
+          "latency_warmup": 10,
+          "latency_timed_n": 100,
+          "he_color_space": "srgb"
+        }
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.001973534494321017,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "epoch_10_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": 10,
+      "metrics_path": "results/cislnet/test/c10_10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.25793641061922,
+        "psnr_std": 3.7888843331186752,
+        "ssim_mean": 0.42236935179199403,
+        "ssim_std": 0.17593507529355057,
+        "fid": 5.2828395366532845,
+        "lpips_convnext_tcga_mean": 0.0020515919840566866,
+        "lpips_convnext_tcga_std": 0.0006766720596262926,
+        "lpips_uni_mean": null,
+        "lpips_uni_std": null
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0020515919840566866,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "epoch_15_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": 15,
+      "metrics_path": "results/cislnet/test/c10_15/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.529791648213838,
+        "psnr_std": 3.7227609252420417,
+        "ssim_mean": 0.4218081125949502,
+        "ssim_std": 0.17081396561139572,
+        "fid": 7.403203191241005,
+        "lpips_convnext_tcga_mean": 0.0020070922905661434,
+        "lpips_convnext_tcga_std": 0.0006791994192630103,
+        "lpips_uni_mean": null,
+        "lpips_uni_std": null
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0020070922905661434,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "epoch_20_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": 20,
+      "metrics_path": "results/cislnet/test/c10_20/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.286651144294837,
+        "psnr_std": 3.7322158267317938,
+        "ssim_mean": 0.42102847530145393,
+        "ssim_std": 0.18120264551799165,
+        "fid": 7.4113225578169875,
+        "lpips_convnext_tcga_mean": 0.0020203163555237934,
+        "lpips_convnext_tcga_std": 0.000687444213643256,
+        "lpips_uni_mean": null,
+        "lpips_uni_std": null
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0020203163555237934,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "epoch_25_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": 25,
+      "metrics_path": "results/cislnet/test/c10_25/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.484777146566664,
+        "psnr_std": 3.8823002711802763,
+        "ssim_mean": 0.42490404880413296,
+        "ssim_std": 0.18069396583818925,
+        "fid": 7.952043345738019,
+        "lpips_convnext_tcga_mean": 0.0020011065678197113,
+        "lpips_convnext_tcga_std": 0.0006937861344398664,
+        "lpips_uni_mean": null,
+        "lpips_uni_std": null
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0020011065678197113,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "epoch_30_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": 30,
+      "metrics_path": "results/cislnet/test/c10_30/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.374737273180894,
+        "psnr_std": 3.2801645211210317,
+        "ssim_mean": 0.4312864295006022,
+        "ssim_std": 0.1769877549325176,
+        "fid": 7.647507026639516,
+        "lpips_convnext_tcga_mean": 0.001973692639177459,
+        "lpips_convnext_tcga_std": 0.0006824830084344469,
+        "lpips_uni_mean": null,
+        "lpips_uni_std": null
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.001973692639177459,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "epoch_5_test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": 5,
+      "metrics_path": "results/cislnet/test/c10_5/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 17.02947823051492,
+        "psnr_std": 3.3774284924923434,
+        "ssim_mean": 0.3884488556505557,
+        "ssim_std": 0.16056876047289595,
+        "fid": 8.610880422856226,
+        "lpips_convnext_tcga_mean": 0.0020982712521080407,
+        "lpips_convnext_tcga_std": 0.0006550012659435172,
+        "lpips_uni_mean": null,
+        "lpips_uni_std": null
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0020982712521080407,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.001973534494321017,
+  "links": {
+    "samples": "results/cislnet/c10/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c10/iter.txt",
+      "results/cislnet/c10/latest_net_G.pth",
+      "results/cislnet/c10/opt.txt",
+      "results/cislnet/test/c10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c10_10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c10_15/patch_eval_test/metrics.json",
+      "results/cislnet/test/c10_20/patch_eval_test/metrics.json",
+      "results/cislnet/test/c10_25/patch_eval_test/metrics.json",
+      "results/cislnet/test/c10_30/patch_eval_test/metrics.json",
+      "results/cislnet/test/c10_5/patch_eval_test/metrics.json"
+    ]
+  }
+}

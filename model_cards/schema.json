@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vslite.local/schemas/model-card/v1.json",
+  "title": "VSliteModelCard",
+  "description": "One publishable weight set for the model catalog. Multiple evals attach as a list. Extensible via task + extensions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "family",
+    "run",
+    "task",
+    "status",
+    "weights",
+    "evals",
+    "created_from"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable catalog id: {family}__{run}",
+      "pattern": "^[a-z0-9][a-z0-9_.+-]*__[a-z0-9][a-z0-9_.+-]*$"
+    },
+    "family": {
+      "type": "string",
+      "description": "Model family directory under results/ (cislnet, swingan_i2i, tcga_encoder, ...)"
+    },
+    "run": {
+      "type": "string",
+      "description": "Short run tag (c13, a13, enc_convnext_t_supcon, ...)"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "task": {
+      "type": "string",
+      "enum": ["i2i", "encoder", "autoencoder", "other"],
+      "description": "Discriminator for task-specific fields. i2i = IR/VIS→H&E generators; encoder = perceptual/feature models; autoencoder = e.g. VQGAN H&E AE."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["published", "draft", "smoke", "superseded"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Generator/encoder class or config name (attunet, ProjectedSwinUnet, convnext_t, ...)"
+        },
+        "backbone": {
+          "type": ["string", "null"]
+        },
+        "attention": {
+          "type": ["string", "null"]
+        },
+        "notes": {
+          "type": "string"
+        },
+        "extras": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "io": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "I/O contract. Required shape depends on task (see allOf).",
+      "properties": {
+        "input_channels": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "input_mode": {
+          "type": ["string", "null"],
+          "description": "e.g. ir10, irvis13, vis_only"
+        },
+        "output_channels": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "train_resolution": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "infer_resolution": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "pixel_size_um": {
+          "type": ["number", "null"]
+        },
+        "color_space": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "training": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "epochs_planned": {
+          "type": ["integer", "null"]
+        },
+        "epochs_completed": {
+          "type": ["integer", "null"]
+        },
+        "batch_size": {
+          "type": ["integer", "null"]
+        },
+        "grad_accum": {
+          "type": ["integer", "null"]
+        },
+        "effective_batch": {
+          "type": ["integer", "null"]
+        },
+        "lr": {
+          "type": ["number", "null"]
+        },
+        "optimizer": {
+          "type": ["string", "null"]
+        },
+        "dataroot": {
+          "type": ["string", "null"]
+        },
+        "seed": {
+          "type": ["integer", "null"]
+        },
+        "losses": {
+          "type": "object",
+          "description": "Loss toggles and lambdas. Keys are loss names; values are weights or booleans.",
+          "additionalProperties": {
+            "type": ["number", "boolean", "string", "null"]
+          }
+        },
+        "hypers": {
+          "type": "object",
+          "description": "Remaining typed-ish hyperparameters not promoted to first-class fields.",
+          "additionalProperties": true
+        },
+        "duration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "wall_hours": {
+              "type": ["number", "null"]
+            },
+            "source": {
+              "type": ["string", "null"]
+            }
+          }
+        }
+      }
+    },
+    "weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Repo-relative path to the canonical checkpoint"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["latest", "epoch", "best_lpips", "other"]
+        },
+        "epoch": {
+          "type": ["integer", "null"]
+        },
+        "bytes": {
+          "type": ["integer", "null"]
+        },
+        "sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "companions": {
+          "type": "array",
+          "description": "Sibling nets for the same step (D, F, …) when present",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evals": {
+      "type": "array",
+      "description": "Zero or more evaluation records attached to this weight set",
+      "items": {
+        "$ref": "#/$defs/eval"
+      }
+    },
+    "primary_lpips": {
+      "type": ["number", "null"],
+      "description": "Denormalized catalog sort key. Prefer frozen-test lpips_convnext_tcga_mean when present."
+    },
+    "links": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional URLs or repo-relative paths (WSI viewer, writeup, samples)"
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Open bag for future fields (quant schemes, hosting URIs, organ protocols) without breaking core validation"
+    },
+    "created_from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generator", "generated_at"],
+      "properties": {
+        "generator": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "const": "i2i"
+          }
+        },
+        "required": ["task"]
+      },
+      "then": {
+        "required": ["io"],
+        "properties": {
+          "io": {
+            "required": ["input_channels", "train_resolution"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "const": "encoder"
+          }
+        },
+        "required": ["task"]
+      },
+      "then": {
+        "required": ["architecture"],
+        "properties": {
+          "architecture": {
+            "required": ["name"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "eval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "split", "metrics"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable within the card (e.g. test, train, hold_kidney_20, quant_fp8)"
+        },
+        "split": {
+          "type": "string",
+          "description": "Logical split name (test, train, val, holdout, …)"
+        },
+        "test_set": {
+          "type": ["string", "null"],
+          "description": "Dataset / protocol label when known"
+        },
+        "n": {
+          "type": ["integer", "null"]
+        },
+        "region": {
+          "type": ["string", "null"],
+          "description": "Organ or spatial holdout label when applicable"
+        },
+        "quantization": {
+          "type": ["string", "null"]
+        },
+        "epoch": {
+          "type": ["integer", "null"],
+          "description": "Epoch evaluated when not the card's canonical weights"
+        },
+        "metrics_path": {
+          "type": ["string", "null"]
+        },
+        "metrics": {
+          "$ref": "#/$defs/metrics"
+        },
+        "primary_metric": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "lower_is_better"],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": ["number", "null"]
+            },
+            "lower_is_better": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lpips_convnext_tcga_mean": {
+          "type": ["number", "null"]
+        },
+        "lpips_convnext_tcga_std": {
+          "type": ["number", "null"]
+        },
+        "lpips_uni_mean": {
+          "type": ["number", "null"]
+        },
+        "lpips_uni_std": {
+          "type": ["number", "null"]
+        },
+        "psnr_mean": {
+          "type": ["number", "null"]
+        },
+        "psnr_std": {
+          "type": ["number", "null"]
+        },
+        "ssim_mean": {
+          "type": ["number", "null"]
+        },
+        "ssim_std": {
+          "type": ["number", "null"]
+        },
+        "fid": {
+          "type": ["number", "null"]
+        },
+        "extras": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Non-core metric keys preserved from metrics.json"
+        }
+      }
+    }
+  }
+}

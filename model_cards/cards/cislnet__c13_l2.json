@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c13_l2",
+  "family": "cislnet",
+  "run": "c13_l2",
+  "display_name": "cislnet/c13_l2",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model cislnet/c13_l2",
+  "tags": [
+    "c13_l2",
+    "cislnet",
+    "i2i",
+    "in13"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 20,
+    "epochs_completed": 21,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": false,
+      "nce": false,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_l2": 1.0,
+      "lambda_nce": 0.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "L2_loss": true,
+      "aspect_ratio": 1.0,
+      "attention_type": "cbam",
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": false,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "decoder_conv": "standard",
+      "decoder_width_mult": 1.0,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "encoder_backbone": "resnet50",
+      "encoder_width_mult": 1.0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c13_l2/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 21,
+    "bytes": 346294995,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c13_l2/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [
+    {
+      "id": "test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_l2/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 18.836840771459936,
+        "psnr_std": 3.38953587637322,
+        "ssim_mean": 0.5536800839360666,
+        "ssim_std": 0.16699431931938358,
+        "fid": 82.05502718606166,
+        "lpips_convnext_tcga_mean": 0.001763530872900734,
+        "lpips_convnext_tcga_std": 0.0006163634068324994
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.001763530872900734,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.001763530872900734,
+  "links": {
+    "wsi_pred": "results/cislnet/test/c13_l2/wsi_pred",
+    "samples": "results/cislnet/c13_l2/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c13_l2/iter.txt",
+      "results/cislnet/c13_l2/latest_net_G.pth",
+      "results/cislnet/c13_l2/opt.txt",
+      "results/cislnet/test/c13_l2/patch_eval_test/metrics.json"
+    ]
+  }
+}

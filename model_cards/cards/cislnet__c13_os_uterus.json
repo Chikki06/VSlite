@@ -1,0 +1,418 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c13_os_uterus",
+  "family": "cislnet",
+  "run": "c13_os_uterus",
+  "display_name": "cislnet/c13_os_uterus",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model cislnet/c13_os_uterus",
+  "tags": [
+    "c13_os_uterus",
+    "cislnet",
+    "i2i",
+    "in13"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 415,
+    "epochs_completed": 416,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": true,
+      "nce": true,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_nce": 10.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "aspect_ratio": 1.0,
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": true,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false,
+      "load_size": 1024,
+      "max_dataset_size": 9223372036854775807,
+      "model": "contrastive_pix2pix",
+      "nThreads": 4,
+      "n_layers_D": 4,
+      "nce_fake_negatives": true
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c13_os_uterus/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 416,
+    "bytes": 346294995,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c13_os_uterus/latest_net_D.pth",
+      "results/cislnet/c13_os_uterus/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [
+    {
+      "id": "hold_uterus_10_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_10",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.9255564339927,
+        "psnr_std": 2.323997605589217,
+        "ssim_mean": 0.26943754608358594,
+        "ssim_std": 0.11531713330079596,
+        "fid": 32.081289465618056
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 32.081289465618056,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_138_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_138",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_138/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.396252175886257,
+        "psnr_std": 2.8701302295288356,
+        "ssim_mean": 0.3088037685169163,
+        "ssim_std": 0.15747409071345658,
+        "fid": 9.736071029048261,
+        "lpips_convnext_tcga_mean": 0.0023776365693556458,
+        "lpips_convnext_tcga_std": 0.0008301638348176119
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023776365693556458,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_15_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_15",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_15/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 14.650625768821174,
+        "psnr_std": 2.031495909645104,
+        "ssim_mean": 0.23333617227782105,
+        "ssim_std": 0.13118056281628096,
+        "fid": 25.639077804307114
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 25.639077804307114,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_20_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_20",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_20/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.909366126520847,
+        "psnr_std": 2.446039701128525,
+        "ssim_mean": 0.28362579600795496,
+        "ssim_std": 0.13514155547561163,
+        "fid": 29.71822472535797
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 29.71822472535797,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_208_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_208",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_208/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.288468391760283,
+        "psnr_std": 2.766212913325902,
+        "ssim_mean": 0.3040012265503628,
+        "ssim_std": 0.15925770963755,
+        "fid": 9.817324582995624,
+        "lpips_convnext_tcga_mean": 0.0023904272183545663,
+        "lpips_convnext_tcga_std": 0.0008150534763331267
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023904272183545663,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_25_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_25",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_25/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.911380016620999,
+        "psnr_std": 2.5422841246165953,
+        "ssim_mean": 0.28048761957584706,
+        "ssim_std": 0.1441050612265495,
+        "fid": 11.895048020624841
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 11.895048020624841,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_277_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_277",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_277/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.583601989520176,
+        "psnr_std": 2.920771451558341,
+        "ssim_mean": 0.31999582446917724,
+        "ssim_std": 0.16099761068232446,
+        "fid": 8.166465905724877,
+        "lpips_convnext_tcga_mean": 0.002292657392960717,
+        "lpips_convnext_tcga_std": 0.0008171879060342349
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.002292657392960717,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_30_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_30",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_30/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.16217320986745,
+        "psnr_std": 2.64440038054182,
+        "ssim_mean": 0.2959451051671266,
+        "ssim_std": 0.14480627267850338,
+        "fid": 16.829874057332702
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 16.829874057332702,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_346_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_346",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_346/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.522716292489118,
+        "psnr_std": 2.931829872706441,
+        "ssim_mean": 0.32552200017088406,
+        "ssim_std": 0.15615635299748104,
+        "fid": 9.080977179861165,
+        "lpips_convnext_tcga_mean": 0.0022962936317049622,
+        "lpips_convnext_tcga_std": 0.0008225303910646965
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0022962936317049622,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_415_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_415",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_415/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.53360074964185,
+        "psnr_std": 2.9679766960530345,
+        "ssim_mean": 0.32679503887448613,
+        "ssim_std": 0.1616183481038614,
+        "fid": 10.49623915231659,
+        "lpips_convnext_tcga_mean": 0.0022971819984323244,
+        "lpips_convnext_tcga_std": 0.0008236638552446471
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0022971819984323244,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_5_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_5",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_5/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.333127712296358,
+        "psnr_std": 2.3041878525565354,
+        "ssim_mean": 0.25370352169616517,
+        "ssim_std": 0.13636945643100046,
+        "fid": 27.898945173451324
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 27.898945173451324,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_uterus_69_test",
+      "split": "test",
+      "test_set": null,
+      "n": 538,
+      "region": "uterus_69",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_uterus__hold_uterus_69/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.253354285407337,
+        "psnr_std": 2.724700725250068,
+        "ssim_mean": 0.3044975660048896,
+        "ssim_std": 0.15260771874772597,
+        "fid": 12.833187810463485,
+        "lpips_convnext_tcga_mean": 0.002394774051787345,
+        "lpips_convnext_tcga_std": 0.0008044249889188573
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.002394774051787345,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.0023776365693556458,
+  "links": {
+    "samples": "results/cislnet/c13_os_uterus/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c13_os_uterus/iter.txt",
+      "results/cislnet/c13_os_uterus/latest_net_G.pth",
+      "results/cislnet/c13_os_uterus/opt.txt",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_138/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_15/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_20/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_208/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_25/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_277/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_30/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_346/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_415/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_5/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_uterus__hold_uterus_69/patch_eval_test/metrics.json"
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "id": "tcga_encoder__enc_convnextv2_t_fcmae",
+  "family": "tcga_encoder",
+  "run": "enc_convnextv2_t_fcmae",
+  "display_name": "tcga_encoder/enc_convnextv2_t_fcmae",
+  "task": "encoder",
+  "status": "draft",
+  "summary": "encoder model tcga_encoder/enc_convnextv2_t_fcmae",
+  "tags": [
+    "enc_convnextv2_t_fcmae",
+    "encoder",
+    "in3",
+    "tcga_encoder"
+  ],
+  "architecture": {
+    "extras": {},
+    "name": "convnextv2_t",
+    "backbone": "convnextv2_t"
+  },
+  "io": {
+    "train_resolution": 256,
+    "infer_resolution": 256,
+    "input_channels": 3,
+    "output_channels": null
+  },
+  "training": {
+    "epochs_planned": 800,
+    "epochs_completed": 93,
+    "batch_size": 512,
+    "grad_accum": 1,
+    "effective_batch": 512,
+    "lr": null,
+    "optimizer": null,
+    "dataroot": null,
+    "seed": null,
+    "losses": {},
+    "hypers": {
+      "arch": "convnextv2_t",
+      "blr": 0.00015,
+      "weight_decay": 0.05,
+      "mask_ratio": 0.6,
+      "patch_size": 32,
+      "decoder_dim": 512,
+      "decoder_depth": 1,
+      "norm_pix_loss": 1,
+      "epochs": 800,
+      "warmup_epochs": 40,
+      "manifest": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/tcga_ut/manifest.csv",
+      "extract_dir": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/tcga_ut/extracted",
+      "res_filter": "",
+      "save_epoch_freq": 5,
+      "recon_freq": 5,
+      "num_workers": 8,
+      "seed": 0,
+      "print_freq": 50,
+      "warm_start": 0,
+      "limit_train": 0,
+      "smoke": false
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/tcga_encoder/enc_convnextv2_t_fcmae/ckpt_latest.pth",
+    "kind": "latest",
+    "epoch": 93,
+    "bytes": 383859203,
+    "sha256": null,
+    "companions": []
+  },
+  "evals": [],
+  "primary_lpips": null,
+  "links": {
+    "samples": "results/tcga_encoder/enc_convnextv2_t_fcmae/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/tcga_encoder/enc_convnextv2_t_fcmae/ckpt_latest.pth",
+      "results/tcga_encoder/enc_convnextv2_t_fcmae/iter.txt",
+      "results/tcga_encoder/enc_convnextv2_t_fcmae/opt.txt"
+    ]
+  }
+}

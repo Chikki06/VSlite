@@ -1,0 +1,418 @@
+{
+  "schema_version": "1.0.0",
+  "id": "cislnet__c13_os_kidney",
+  "family": "cislnet",
+  "run": "c13_os_kidney",
+  "display_name": "cislnet/c13_os_kidney",
+  "task": "i2i",
+  "status": "published",
+  "summary": "i2i model cislnet/c13_os_kidney",
+  "tags": [
+    "c13_os_kidney",
+    "cislnet",
+    "i2i",
+    "in13"
+  ],
+  "architecture": {
+    "extras": {
+      "netD": "multiscale",
+      "netF": "vgg19",
+      "netH": "mlp_sample",
+      "model": "contrastive_pix2pix"
+    },
+    "name": "attunet",
+    "backbone": "attunet"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 1024,
+    "infer_resolution": 1024,
+    "color_space": "srgb",
+    "pixel_size_um": 0.69
+  },
+  "training": {
+    "epochs_planned": 282,
+    "epochs_completed": 283,
+    "batch_size": 10,
+    "grad_accum": 1,
+    "effective_batch": 10,
+    "lr": 0.0002,
+    "optimizer": "adam",
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": 1337,
+    "losses": {
+      "l1": false,
+      "gan": true,
+      "nce": true,
+      "convnext": false,
+      "gan_feat": false,
+      "lambda_l1": 10.0,
+      "lambda_nce": 10.0,
+      "lambda_gan": 1.0,
+      "lambda_vgg": 10.0
+    },
+    "hypers": {
+      "D_steps_per_G": 1,
+      "G_eval_mode": false,
+      "aspect_ratio": 1.0,
+      "beta1": 0.5,
+      "beta2": 0.999,
+      "cache_filelist_read": false,
+      "cache_filelist_write": false,
+      "contain_dontcare_label": false,
+      "continue_train": true,
+      "convnext_loss_include_input": false,
+      "convnext_normalize_input": false,
+      "crop_size": 512,
+      "data_augmentation": null,
+      "dataset_mode": "VS",
+      "debug": false,
+      "display_freq": 30000,
+      "display_winsize": 400,
+      "early_stop_min_delta": 0.0001,
+      "early_stop_patience": 0,
+      "evaluation_metrics": null,
+      "exp_id": null,
+      "freeze_netF": true,
+      "freeze_netG": false,
+      "freeze_netH": false,
+      "gan_mode": "ls",
+      "gradient_flows_to_negative_nce": false,
+      "he_color_space": "srgb",
+      "inception_weights": "fid_inception",
+      "init_type": "xavier",
+      "init_variance": 0.02,
+      "ir_channel_indices": null,
+      "label_nc": 4,
+      "layer_weights": null,
+      "load_from_opt_file": false,
+      "load_size": 1024,
+      "max_dataset_size": 9223372036854775807,
+      "model": "contrastive_pix2pix",
+      "nThreads": 4,
+      "n_layers_D": 4,
+      "nce_fake_negatives": true
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/cislnet/c13_os_kidney/latest_net_G.pth",
+    "kind": "latest",
+    "epoch": 283,
+    "bytes": 346294995,
+    "sha256": null,
+    "companions": [
+      "results/cislnet/c13_os_kidney/latest_net_D.pth",
+      "results/cislnet/c13_os_kidney/latest_net_F_q.pth"
+    ]
+  },
+  "evals": [
+    {
+      "id": "hold_kidney_10_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_10",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_10/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.092451226771496,
+        "psnr_std": 3.0162576261442986,
+        "ssim_mean": 0.2971597981109495,
+        "ssim_std": 0.17270386410252597,
+        "fid": 17.775028772660875
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 17.775028772660875,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_141_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_141",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_141/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.72007161512425,
+        "psnr_std": 2.9603559253911533,
+        "ssim_mean": 0.35900739216634625,
+        "ssim_std": 0.1659009450440304,
+        "fid": 9.15137508876272,
+        "lpips_convnext_tcga_mean": 0.0022867434267570615,
+        "lpips_convnext_tcga_std": 0.0007099594258563073
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0022867434267570615,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_15_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_15",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_15/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.375403021153152,
+        "psnr_std": 2.862898657102574,
+        "ssim_mean": 0.313271671750547,
+        "ssim_std": 0.1621442561307581,
+        "fid": 13.589411133450014
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 13.589411133450014,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_188_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_188",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_188/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.64997147256679,
+        "psnr_std": 3.0197333728478424,
+        "ssim_mean": 0.3547242663412954,
+        "ssim_std": 0.1738475840885298,
+        "fid": 7.937788686905762,
+        "lpips_convnext_tcga_mean": 0.0023477738920610444,
+        "lpips_convnext_tcga_std": 0.0007431502145988956
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023477738920610444,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_20_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_20",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_20/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.393483365556026,
+        "psnr_std": 2.756303338821481,
+        "ssim_mean": 0.3454744046764007,
+        "ssim_std": 0.15479303676577746,
+        "fid": 12.022610514710848
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 12.022610514710848,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_235_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_235",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_235/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.619549392533205,
+        "psnr_std": 2.978838697814183,
+        "ssim_mean": 0.35760724086134404,
+        "ssim_std": 0.1724815019082368,
+        "fid": 9.627561416672293,
+        "lpips_convnext_tcga_mean": 0.0023325961406669873,
+        "lpips_convnext_tcga_std": 0.0007258640997379888
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0023325961406669873,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_25_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_25",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_25/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.646258261327198,
+        "psnr_std": 2.8010796650668808,
+        "ssim_mean": 0.30541695807650776,
+        "ssim_std": 0.17346004263093928,
+        "fid": 13.548912795203364
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 13.548912795203364,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_282_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_282",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_282/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.465639471945206,
+        "psnr_std": 2.9594464675936085,
+        "ssim_mean": 0.344462288125814,
+        "ssim_std": 0.1714578344410257,
+        "fid": 7.4749990047692165,
+        "lpips_convnext_tcga_mean": 0.002389022541344065,
+        "lpips_convnext_tcga_std": 0.0007359300244053609
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.002389022541344065,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_30_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_30",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_30/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 15.616118195378407,
+        "psnr_std": 2.9182062831584115,
+        "ssim_mean": 0.3179528497510314,
+        "ssim_std": 0.1716398179001691,
+        "fid": 10.531460024650727
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 10.531460024650727,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_47_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_47",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_47/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.10774607948779,
+        "psnr_std": 2.821479991263689,
+        "ssim_mean": 0.32841483586210446,
+        "ssim_std": 0.16939297130861714,
+        "fid": 7.317772366981444,
+        "lpips_convnext_tcga_mean": 0.0024427071333383357,
+        "lpips_convnext_tcga_std": 0.0007237875624923872
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0024427071333383357,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_5_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_5",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_5/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.31200409248165,
+        "psnr_std": 2.7097596063146443,
+        "ssim_mean": 0.3097144127021344,
+        "ssim_std": 0.156762904745093,
+        "fid": 18.869180765264645
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 18.869180765264645,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "hold_kidney_94_test",
+      "split": "test",
+      "test_set": null,
+      "n": 807,
+      "region": "kidney_94",
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/cislnet/test/c13_os_kidney__hold_kidney_94/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 16.49033551583535,
+        "psnr_std": 3.0227654689867216,
+        "ssim_mean": 0.3565476680869211,
+        "ssim_std": 0.17256866540658097,
+        "fid": 6.042718631709548,
+        "lpips_convnext_tcga_mean": 0.0022946063974696846,
+        "lpips_convnext_tcga_std": 0.0007214590644089746
+      },
+      "primary_metric": {
+        "name": "lpips_convnext_tcga_mean",
+        "value": 0.0022946063974696846,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": 0.0022867434267570615,
+  "links": {
+    "samples": "results/cislnet/c13_os_kidney/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/cislnet/c13_os_kidney/iter.txt",
+      "results/cislnet/c13_os_kidney/latest_net_G.pth",
+      "results/cislnet/c13_os_kidney/opt.txt",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_10/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_141/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_15/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_188/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_20/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_235/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_25/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_282/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_30/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_47/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_5/patch_eval_test/metrics.json",
+      "results/cislnet/test/c13_os_kidney__hold_kidney_94/patch_eval_test/metrics.json"
+    ]
+  }
+}

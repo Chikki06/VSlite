@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0.0",
+  "id": "vqgan_vs__vq_b",
+  "family": "vqgan_vs",
+  "run": "vq_b",
+  "display_name": "vqgan_vs/vq_b",
+  "task": "autoencoder",
+  "status": "published",
+  "summary": "autoencoder model vqgan_vs/vq_b",
+  "tags": [
+    "autoencoder",
+    "in13",
+    "vq_b",
+    "vqgan_vs"
+  ],
+  "architecture": {
+    "extras": {},
+    "name": "VQGAN",
+    "backbone": "vqgan"
+  },
+  "io": {
+    "input_channels": 13,
+    "input_mode": null,
+    "output_channels": 3,
+    "train_resolution": 512,
+    "infer_resolution": 512,
+    "color_space": null,
+    "pixel_size_um": null
+  },
+  "training": {
+    "epochs_planned": 50,
+    "epochs_completed": 50,
+    "batch_size": 8,
+    "grad_accum": 1,
+    "effective_batch": 8,
+    "lr": null,
+    "optimizer": null,
+    "dataroot": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/dataset/data_frozen",
+    "seed": null,
+    "losses": {},
+    "hypers": {
+      "amp": true,
+      "beta1": 0.5,
+      "beta2": 0.9,
+      "disc_factor": 1.0,
+      "disc_start": 10000,
+      "discriminator_variant": "default",
+      "epochs": 50,
+      "gpu": 0,
+      "grad_accum_steps": 4,
+      "latent_dim": 256,
+      "latent_grid_size": 16,
+      "learning_rate": 2.25e-05,
+      "num_codebook_vectors": 4096,
+      "num_ir_channels": 10,
+      "perceptual_loss_factor": 1.0,
+      "rec_loss_factor": 1.0,
+      "results_dir": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs",
+      "resume": "auto",
+      "sample_schedule_saves": 100
+    },
+    "duration": {
+      "wall_hours": null,
+      "source": null
+    }
+  },
+  "weights": {
+    "path": "results/vqgan_vs/vq_b/checkpoints/ckpt_latest.pt",
+    "kind": "latest",
+    "epoch": 50,
+    "bytes": 1029584221,
+    "sha256": null,
+    "companions": []
+  },
+  "evals": [
+    {
+      "id": "test",
+      "split": "test",
+      "test_set": null,
+      "n": 6929,
+      "region": null,
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/vqgan_vs/test/vq_b/patch_eval_test/metrics.json",
+      "metrics": {
+        "psnr_mean": 13.81880158648698,
+        "psnr_std": 1.4873357819141124,
+        "ssim_mean": 0.21790571627701055,
+        "ssim_std": 0.1092578256404667,
+        "fid": 126.86855997649556,
+        "extras": {
+          "name": "vq_b",
+          "ckpt": "vqgan_epoch_049.pt",
+          "out_dir": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs/test/vq_b/patch_eval_test"
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 126.86855997649556,
+        "lower_is_better": true
+      }
+    },
+    {
+      "id": "train",
+      "split": "train",
+      "test_set": null,
+      "n": 60047,
+      "region": null,
+      "quantization": null,
+      "epoch": null,
+      "metrics_path": "results/vqgan_vs/test/vq_b/patch_eval_train/metrics.json",
+      "metrics": {
+        "psnr_mean": 13.642284611967817,
+        "psnr_std": 1.5947526937639824,
+        "ssim_mean": 0.20204151076637492,
+        "ssim_std": 0.10596822170293685,
+        "fid": 129.91912160455843,
+        "extras": {
+          "name": "vq_b",
+          "ckpt": "vqgan_epoch_049.pt",
+          "out_dir": "/projects/illinois/eng/bioe/rxb/akshat/VSlite/results/vqgan_vs/test/vq_b/patch_eval_train"
+        }
+      },
+      "primary_metric": {
+        "name": "fid",
+        "value": 129.91912160455843,
+        "lower_is_better": true
+      }
+    }
+  ],
+  "primary_lpips": null,
+  "links": {
+    "wsi_pred": "results/vqgan_vs/test/vq_b/wsi_pred",
+    "samples": "results/vqgan_vs/vq_b/samples"
+  },
+  "extensions": {},
+  "created_from": {
+    "generator": "scripts/build_model_cards.py",
+    "generated_at": "2026-11-20T19:35:18Z",
+    "sources": [
+      "results/vqgan_vs/test/vq_b/patch_eval_test/metrics.json",
+      "results/vqgan_vs/test/vq_b/patch_eval_train/metrics.json",
+      "results/vqgan_vs/vq_b/checkpoints/ckpt_latest.pt",
+      "results/vqgan_vs/vq_b/iter.txt",
+      "results/vqgan_vs/vq_b/opt.txt"
+    ]
+  }
+}
