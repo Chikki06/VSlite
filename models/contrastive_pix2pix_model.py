@@ -4,6 +4,7 @@ Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses
 """
 
 import contextlib
+import os
 
 import numpy as np
 import torch
@@ -107,6 +108,14 @@ class ContrastivePix2PixModel(torch.nn.Module):
         parser.add_argument('--nce_norm', type=int, default=2)
         parser.add_argument('--nce_fake_negatives', type=util.str2bool, default=True)
         parser.add_argument('--netF_resize_input', type=util.str2bool, default=True)
+        parser.add_argument(
+            '--nce_diag',
+            type=util.str2bool,
+            default=False,
+            help='Log PatchNCE cosine margins and top-1 accuracy after mlp_sample '
+            '(JSONL under checkpoints/<name>/nce_diag.jsonl; also mirrored into '
+            'print/TB loss dict without affecting the backward pass).',
+        )
         return parser
 
     def __init__(self, opt):
@@ -161,6 +170,25 @@ class ContrastivePix2PixModel(torch.nn.Module):
                 # TODO: Ensure this works!
                 self.netF_q.encoder.model.load_state_dict(
                     getattr(models, self.opt.netF)().state_dict()
+                )
+            elif self.opt.netF.lower() == 'uni':
+                # create_network xavier-inits the whole ContrastiveEncoder
+                # (including the frozen backbone), so re-apply the UNI weights
+                # the same way the ConvNeXt path does.
+                from models.networks.nce_diag import parse_int_list
+
+                self.netF_q.encoder.load_state_dict(
+                    networks.UNIFeatureExtractor(
+                        opt=opt,
+                        pretrained=True,
+                        freeze_weights=opt.freeze_netF,
+                        uni_input_size=getattr(opt, 'uni_input_size', None),
+                        uni_ckpt_path=getattr(opt, 'uni_feature_ckpt', None),
+                        grad_checkpoint=False,
+                        blocks=parse_int_list(
+                            getattr(opt, 'uni_blocks', None), default=(2, 5, 8, 11)
+                        ),
+                    ).state_dict()
                 )
 
     # Entry point for all calls involving forward pass
@@ -475,6 +503,47 @@ class ContrastivePix2PixModel(torch.nn.Module):
             layer_weights=layer_weights,
         )
 
+    def _maybe_record_nce_diag(self, feat_q_pool, feat_k_pool):
+        """Stash margin/top-1 stats; never enters the backward graph."""
+        if not getattr(self.opt, 'nce_diag', False):
+            self._last_nce_diag = None
+            return
+        from models.networks.nce_diag import (
+            append_nce_diag_jsonl,
+            average_diag_stats,
+            compute_patch_nce_diag,
+        )
+
+        layer_stats = []
+        with torch.no_grad():
+            for f_q, f_k in zip(feat_q_pool, feat_k_pool):
+                layer_stats.append(
+                    compute_patch_nce_diag(
+                        f_q.detach(),
+                        f_k.detach(),
+                        nce_fake_negatives=bool(self.opt.nce_fake_negatives),
+                    )
+                )
+        avg = average_diag_stats(layer_stats)
+        self._last_nce_diag = avg.as_log_dict()
+        # JSONL under the run checkpoint dir (same place as loss curves).
+        ckpt_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
+        jsonl = os.path.join(ckpt_dir, 'nce_diag.jsonl')
+        step = int(getattr(self, '_nce_diag_step', 0)) + 1
+        self._nce_diag_step = step
+        append_nce_diag_jsonl(
+            jsonl,
+            step=step,
+            epoch=int(getattr(self.opt, 'epoch', 0) or 0),
+            stats=avg,
+            extra={
+                'nce_t': float(self.opt.nce_t),
+                'num_patches': int(self.opt.num_patches),
+                'uni_blocks': str(getattr(self.opt, 'uni_blocks', '')),
+                'netF': str(self.opt.netF),
+            },
+        )
+
     def _compute_total_nce_loss(
         self,
         feat_q_pool,
@@ -499,6 +568,7 @@ class ContrastivePix2PixModel(torch.nn.Module):
         ):
             loss = crit(f_q, f_k) * lambda_NCE * layer_weight
             total_nce_loss += loss.mean()
+        self._maybe_record_nce_diag(feat_q_pool, feat_k_pool)
         return total_nce_loss / num_layers
 
     def _compute_total_nce_loss_bidirectional(
@@ -526,6 +596,7 @@ class ContrastivePix2PixModel(torch.nn.Module):
             loss = crit(f_q, f_k) * lambda_NCE * layer_weight
             loss += crit(f_k, f_q) * lambda_NCE * layer_weight
             total_nce_loss += loss.mean()
+        self._maybe_record_nce_diag(feat_q_pool, feat_k_pool)
         return total_nce_loss / num_layers
 
     def compute_discriminator_loss(

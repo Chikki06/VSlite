@@ -221,3 +221,196 @@ class ConvNeXtFeatureExtractor(torch.nn.Module):
         h_relu4 = self.slice4(h_relu3)
         h_relu5 = self.slice5(h_relu4)
         return [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
+
+
+_UNI_DEFAULT_CKPT_NAME = "UNI"
+_UNI_DEFAULT_CKPT = "foundation_models/UNI/pytorch_model.bin"
+
+
+def resolve_uni_feature_ckpt(ckpt_path=None, opt=None) -> str:
+    """Resolve UNI v1 weights from an explicit path, ``opt.uni_feature_ckpt``,
+    ``VSLITE_UNI_CKPT``, or the repo default ``foundation_models/UNI/pytorch_model.bin``."""
+    import os
+    from pathlib import Path
+
+    candidates: list[str] = []
+    if ckpt_path is not None and str(ckpt_path).strip():
+        candidates.append(str(ckpt_path).strip())
+    if opt is not None:
+        raw = getattr(opt, "uni_feature_ckpt", None)
+        if raw is not None and str(raw).strip():
+            candidates.append(str(raw).strip())
+    env = os.environ.get("VSLITE_UNI_CKPT", "").strip()
+    if env:
+        candidates.append(env)
+    root = os.environ.get("VSLITE_ROOT", "").strip() or str(
+        Path(__file__).resolve().parents[2]
+    )
+    candidates.append(os.path.join(root, _UNI_DEFAULT_CKPT))
+
+    tried: list[str] = []
+    seen: set[str] = set()
+    for raw in candidates:
+        if raw in seen:
+            continue
+        seen.add(raw)
+        for p in (Path(raw),):
+            tried.append(str(p))
+            if p.is_file():
+                return str(p)
+            if p.is_dir():
+                files = sorted(x for x in p.iterdir() if x.is_file())
+                if len(files) == 1:
+                    return str(files[0])
+                for name in ("pytorch_model.bin", "model.safetensors"):
+                    cand = p / name
+                    if cand.is_file():
+                        return str(cand)
+    raise FileNotFoundError(
+        "UNI feature checkpoint not found. Provide --uni_feature_ckpt or set "
+        f"VSLITE_UNI_CKPT (expected {candidates[0] if candidates else _UNI_DEFAULT_CKPT}). "
+        f"Tried: {tried}"
+    )
+
+
+class UNIFeatureExtractor(torch.nn.Module):
+    """UNI v1 (MahmoodLab/UNI, ViT-L/16, 1024-d) patch-token feature maps.
+
+    Drop-in counterpart of ``ConvNeXtFeatureExtractor`` for ``--netF uni``:
+    returns a list of BCHW feature maps from intermediate transformer blocks
+    (default blocks 2/5/8/11 — four maps, matching the four ConvNeXt stage maps
+    produced by ``nce_layers='1,2,3,4,5'`` -> ``out[1:]``). CLS token is dropped;
+    patch tokens are reshaped to ``(B, C, H', W')`` where ``H' = W' = size / 16``.
+
+    The backbone is built at the canonical 224px grid and loads the checkpoint
+    with ``strict=True``; timm's ``dynamic_img_size`` interpolates the learned
+    position embeddings to the runtime grid (e.g. 1024 -> 64x64 tokens).
+
+    Inputs arrive in ``[-1, 1]`` and are mapped to ``[0, 1]`` then ImageNet
+    mean/std normalized (same contract as the ConvNeXt extractor).
+    """
+
+    UNI_BLOCKS = (2, 5, 8, 11)
+
+    def __init__(
+        self,
+        opt=None,
+        pretrained=True,
+        freeze_weights=True,
+        uni_input_size=None,
+        uni_ckpt_path=None,
+        grad_checkpoint=True,
+        blocks=None,
+    ):
+        super().__init__()
+        self.opt = opt
+        import timm
+        from torch.utils.checkpoint import checkpoint as _ckpt
+
+        self._ckpt_fn = _ckpt
+
+        if uni_input_size is not None:
+            size = int(uni_input_size)
+        elif opt is not None:
+            size = int(getattr(opt, "uni_input_size", 1024))
+        else:
+            size = 1024
+        if size % 16 != 0:
+            raise ValueError(
+                f"UNI feature extractor input size must be a multiple of 16, got {size}"
+            )
+        self.input_size = size
+
+        self.take_blocks = tuple(
+            blocks if blocks is not None else self.UNI_BLOCKS
+        )
+        n_blocks = 24  # ViT-L/16 depth
+        if any(b < 0 or b >= n_blocks for b in self.take_blocks):
+            raise ValueError(
+                f"UNI blocks must be in [0, {n_blocks - 1}], got {self.take_blocks}"
+            )
+
+        # Canonical 224 construction: matches the UNI checkpoint exactly so the
+        # state_dict loads with strict=True; runtime inputs at other sizes get
+        # their position embeddings interpolated by timm (dynamic_img_size).
+        model = timm.create_model(
+            "vit_large_patch16_224",
+            img_size=224,
+            patch_size=16,
+            init_values=1e-5,
+            num_classes=0,
+            dynamic_img_size=True,
+        )
+        if pretrained:
+            ckpt_path = resolve_uni_feature_ckpt(uni_ckpt_path, opt)
+            state = torch.load(ckpt_path, map_location="cpu")
+            if isinstance(state, dict):
+                for k in ("state_dict", "model", "net", "weights"):
+                    if k in state and isinstance(state[k], dict):
+                        state = state[k]
+                        break
+            if isinstance(state, dict):
+                state = {k[7:] if k.startswith("module.") else k: v for k, v in state.items()}
+            else:
+                raise RuntimeError(f"Unexpected UNI checkpoint format: {type(state)}")
+            model.load_state_dict(state, strict=True)
+            self.ckpt_path = ckpt_path
+        else:
+            self.ckpt_path = None
+
+        self.model = model
+        self.grad_checkpoint = bool(grad_checkpoint)
+
+        if freeze_weights:
+            for param in self.parameters():
+                param.requires_grad = False
+
+        self.register_buffer(
+            "mean",
+            torch.tensor([0.485, 0.456, 0.406]).view(1, -1, 1, 1),
+            persistent=False,
+        )
+        self.register_buffer(
+            "std",
+            torch.tensor([0.229, 0.224, 0.225]).view(1, -1, 1, 1),
+            persistent=False,
+        )
+
+    def forward(self, x_org):
+        vit = self.model
+        x = x_org.float()
+        if x.shape[-1] != self.input_size or x.shape[-2] != self.input_size:
+            x = F.interpolate(
+                x, size=(self.input_size, self.input_size), mode="bilinear", align_corners=False
+            )
+        x = x / 2 + 0.5
+        x = (x - self.mean) / self.std
+
+        x = vit.patch_embed(x)
+        x = vit._pos_embed(x)
+        x = vit.pos_drop(x)
+
+        use_ckpt = self.grad_checkpoint and torch.is_grad_enabled() and x.requires_grad
+        max_idx = max(self.take_blocks)
+        feats = []
+        for i, blk in enumerate(vit.blocks):
+            if i > max_idx:
+                break
+            if use_ckpt:
+                x = self._ckpt_fn(blk, x, use_reentrant=False)
+            else:
+                x = blk(x)
+            if i in self.take_blocks:
+                B, N, C = x.shape
+                grid = (self.input_size // 16) ** 2
+                # ViT-L/16 carries a single CLS prefix token (no register tokens).
+                tokens = x[:, 1:, :] if N - 1 == grid else x[:, -grid:, :]
+                H = W = int(tokens.shape[1] ** 0.5)
+                feats.append(
+                    tokens.transpose(1, 2).reshape(B, C, H, W).contiguous()
+                )
+        if len(feats) != len(self.take_blocks):
+            raise RuntimeError(
+                f"UNI feature extractor expected {len(self.take_blocks)} maps, got {len(feats)}"
+            )
+        return feats

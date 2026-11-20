@@ -335,6 +335,35 @@ class BaseOptions:
             help='Path to the TCGA-pretrained ConvNeXt checkpoint for the VGG19 feature encoder '
             '(perceptual loss / netF=vgg19). Must be non-empty and exist when that encoder is used.',
         )
+        parser.add_argument(
+            '--uni_feature_ckpt',
+            type=str,
+            default='',
+            help='Path to the gated UNI v1 checkpoint (MahmoodLab/UNI ViT-L/16) for the UNI '
+            'feature encoder (netF=uni) and the lpips_uni metric. Falls back to env '
+            'VSLITE_UNI_CKPT then foundation_models/UNI/pytorch_model.bin.',
+        )
+        parser.add_argument(
+            '--uni_input_size',
+            type=int,
+            default=1024,
+            help='Input size for the UNI feature encoder (multiple of 16). Position '
+            'embeddings are interpolated from the canonical 224 grid at runtime.',
+        )
+        parser.add_argument(
+            '--uni_grad_checkpoint',
+            type=util.str2bool,
+            default=True,
+            help='Gradient checkpointing for the UNI transformer blocks (needed for '
+            'full-resolution 1024 token grids).',
+        )
+        parser.add_argument(
+            '--uni_blocks',
+            type=str,
+            default='2,5,8,11',
+            help='Comma-separated UNI ViT-L/16 block indices to take feature maps from '
+            '(default early-half 2/5/8/11; mid/late e.g. 4,10,16,22).',
+        )
         self.initialized = True
         return parser
 

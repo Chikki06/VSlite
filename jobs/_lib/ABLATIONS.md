@@ -62,6 +62,41 @@ sbatch jobs/restormer/train/train.sh
 | `NO_GAN` | `0` | Set `1` to disable GAN term where supported. |
 | `ATTENTION_TYPE` | CISLNet | Skip-attention for AttUnet: `none` = attention-free U-Net (default `cbam`). |
 
+## Contrastive feature extractor (netF) — UNI ablation
+
+The NCE/contrastive encoder (`--netF`) defaults to `vgg19`, which is the frozen
+**ConvNeXt-Tiny TCGA** checkpoint. A gated **UNI v1** (MahmoodLab/UNI, ViT-L/16,
+1024-d) alternative exists for CISLNet:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `NETF` | *(unset)* | `uni` → `--netF uni` (UNI replaces ConvNeXt-TCGA as the frozen NCE feature extractor; maps from transformer blocks 2/5/8/11). |
+| `UNI_CKPT` | `$VSLITE_ROOT/foundation_models/UNI/pytorch_model.bin` | Gated UNI v1 checkpoint path (`--uni_feature_ckpt`; also env `VSLITE_UNI_CKPT`). |
+| `UNI_INPUT_SIZE` | `1024` | UNI operating resolution (multiple of 16). Position embeddings are interpolated from the canonical 224 grid at runtime; 1024 = full-res 64×64 tokens. |
+| `UNI_GRAD_CHECKPOINT` | `true` | Checkpoint UNI blocks (needed for the 4096-token query path). |
+| `VSLITE_UNI_LPIPS` | `0` | `1` → test jobs also compute the **`lpips_uni`** metric (Zhang lin0 on frozen UNI, blocks 2/5/8/11) alongside `lpips_convnext_tcga`. Explicit ckpt override: `VSLITE_UNI_LPIPS_CKPT`. |
+| `UNI_BLOCKS` | `2,5,8,11` | Comma-separated ViT-L/16 block indices for netF=uni (`--uni_blocks`). Mid/late e.g. `4,10,16,22` for stronger structure/texture. |
+| `NCE_T` | `0.07` | PatchNCE temperature (`--nce_t`). For UNI, try `0.10` / `0.15` (or `0.05` if sims are compressed). |
+| `NUM_PATCHES` | `1024` | Patches sampled per NCE layer (`--num_patches`). At 1024² UNI (64×64=4096 tokens), 512–1024 is typical. |
+| `NCE_DIAG` | `0` | `1` → log post-`mlp_sample` sim_pos / sim_neg (mean+hard) / margins / PatchNCE top-1 to `results/cislnet/<run>/nce_diag.jsonl` and print a summary. |
+| `MAX_DATASET_SIZE` | *(unset)* | Cap train set size for short sanity runs (`--max_dataset_size`). |
+| `PRINT_FREQ` | `100` | Train print/TB interval (samples). |
+
+Canonical queue for the UNI run (train → patch eval → WSI → DZI → campus upload):
+
+```bash
+bash jobs/cislnet/submit_c13_uni.sh    # RUN=c13_uni, EPOCHS=20, NETF=uni
+```
+
+Diagnose PatchNCE separation, then queue the targeted `nce_t` / `UNI_BLOCKS` / `NUM_PATCHES` tune arms (afterok on diagnose):
+
+```bash
+bash jobs/cislnet/submit_c13_uni_nce_diag_then_tune.sh
+# or stepwise:
+#   bash jobs/cislnet/submit_c13_uni_nce_diag.sh
+#   DIAG_JID=<jid> bash jobs/cislnet/submit_c13_uni_nce_tune.sh
+```
+
 ## Optimizer & schedule
 
 | Variable | Values | Effect |

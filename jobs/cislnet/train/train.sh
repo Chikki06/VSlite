@@ -52,6 +52,29 @@ else
 fi
 if [[ -n "$IR_INDICES" ]]; then EXTRA+=(--ir_channel_indices "$IR_INDICES"); fi
 
+# Contrastive feature extractor (netF). Default (unset) = vgg19 = ConvNeXt-TCGA.
+# NETF=uni swaps in the gated UNI v1 ViT-L/16 (frozen backbone, full-res tokens).
+if [[ -n "${NETF:-}" ]]; then
+  EXTRA+=(--netF "$NETF")
+  if [[ "$NETF" == "uni" ]]; then
+    EXTRA+=(--uni_feature_ckpt "${UNI_CKPT:-${VSLITE_UNI_CKPT:-$VSLITE_ROOT/foundation_models/UNI/pytorch_model.bin}}")
+    EXTRA+=(--uni_input_size "${UNI_INPUT_SIZE:-1024}")
+    EXTRA+=(--uni_grad_checkpoint "${UNI_GRAD_CHECKPOINT:-true}")
+    if [[ -n "${UNI_BLOCKS:-}" ]]; then
+      EXTRA+=(--uni_blocks "$UNI_BLOCKS")
+    fi
+  fi
+fi
+
+# PatchNCE knobs + short-sanity helpers (all optional).
+[[ -n "${NCE_T:-}" ]] && EXTRA+=(--nce_t "$NCE_T")
+[[ -n "${NUM_PATCHES:-}" ]] && EXTRA+=(--num_patches "$NUM_PATCHES")
+case "${NCE_DIAG:-0}" in
+  1|true|TRUE|yes|YES) EXTRA+=(--nce_diag true) ;;
+esac
+[[ -n "${MAX_DATASET_SIZE:-}" ]] && EXTRA+=(--max_dataset_size "$MAX_DATASET_SIZE")
+PRINT_FREQ="${PRINT_FREQ:-100}"
+
 # Objective / loss plumbing (all optional — unset = unchanged defaults).
 # NOTE: codebase defaults are NCE + GAN(LSGAN); pixel L1 and L2 are OFF by default.
 if [[ -n "${ATTENTION_TYPE:-}" ]]; then EXTRA+=(--attention_type "$ATTENTION_TYPE"); fi
@@ -97,7 +120,7 @@ if [[ -n "${VAL_LIST_PATH:-}" ]]; then EXTRA+=(--val_list_path "$VAL_LIST_PATH")
 
 python scripts/train.py \
   --dataroot "$DATAROOT" --dataset_mode VS --model contrastive_pix2pix \
-  --gpu_ids 0 --nThreads "$NTHREADS" --print_freq 100 --save_epoch_freq "$SAVE_EPOCH_FREQ" \
+  --gpu_ids 0 --nThreads "$NTHREADS" --print_freq "$PRINT_FREQ" --save_epoch_freq "$SAVE_EPOCH_FREQ" \
   --save_latest_freq 30000 --continue_train "$CONTINUE_TRAIN" --name "$NAME" \
   --checkpoints_dir "$CHECKPOINTS_DIR" \
   "${EXTRA[@]}"
@@ -105,3 +128,14 @@ python scripts/train.py \
 UNIFIED_DIR="$VSLITE_ROOT/results/unified/cislnet/$NAME"
 python util/plot_loss_curves.py \
   --log_dir "$UNIFIED_DIR" --out_dir "$CHECKPOINTS_DIR/$NAME/curves" || true
+
+# After a diagnose sanity train, emit a one-shot verdict from the JSONL.
+if [[ "${NCE_DIAG:-0}" == "1" || "${NCE_DIAG:-0}" == "true" ]]; then
+  DIAG_JSONL="$CHECKPOINTS_DIR/$NAME/nce_diag.jsonl"
+  if [[ -f "$DIAG_JSONL" ]]; then
+    python -m models.networks.nce_diag "$DIAG_JSONL" \
+      --out "$CHECKPOINTS_DIR/$NAME/nce_diag_summary.json" || true
+  else
+    echo "NCE_DIAG=1 but missing $DIAG_JSONL" >&2
+  fi
+fi

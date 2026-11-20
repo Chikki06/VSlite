@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from models.networks.architecture import ConvNeXtFeatureExtractor
+from models.networks.architecture import ConvNeXtFeatureExtractor, UNIFeatureExtractor
 from models.networks.base_network import BaseNetwork
 from models.networks.normalization import get_nonspade_norm_layer
 from models.networks.utils import FeatureHooks
@@ -22,12 +22,15 @@ class ContrastiveEncoder(BaseNetwork):
         self.encoder = self._get_encoder(opt)
         self.projection = define_H(opt)
         self.nce_layers = [int(i) for i in self.opt.nce_layers.split(',')]
-        self.forward(
-            torch.randn(
-                1, 3, int(opt.crop_size // opt.aspect_ratio), int(opt.crop_size)
-            ),
-            nce_layers=self.nce_layers,
-        )
+        if self.opt.netF.lower() not in ('uni',):
+            # UNI returns maps directly and needs no hook dry-run; a CPU dry
+            # forward at full patch size would add minutes of init time.
+            self.forward(
+                torch.randn(
+                    1, 3, int(opt.crop_size // opt.aspect_ratio), int(opt.crop_size)
+                ),
+                nce_layers=self.nce_layers,
+            )
 
     def forward(self, x, y=None, nce_layers=None, num_patches=256, patch_ids=None):
         feats = self.features(x, y=y, nce_layers=nce_layers)
@@ -47,6 +50,10 @@ class ContrastiveEncoder(BaseNetwork):
                 return out[2:]
             elif self.nce_layers == [3, 4, 5]:
                 return out[3:]
+        elif self.opt.netF.lower() == 'uni':
+            # UNI extractor already returns the block maps used by NCE
+            # (blocks 2/5/8/11 — the ConvNeXt `out[1:]` analogue).
+            return self.encoder(x)
         elif self.opt.netF.lower() == 'pixel':
             return self.encoder(x)
         if nce_layers is not None and nce_layers != self.nce_layers:
@@ -77,6 +84,26 @@ class ContrastiveEncoder(BaseNetwork):
                 pretrained=pt,
                 freeze_weights=opt.freeze_netF,
                 before_relu=vars(opt).get('vgg_before_relu', False),
+            )
+        elif opt.netF.lower() == 'uni':
+            # Same effective weights as the ConvNeXt branch (stages 2-5 of
+            # [1, 1/32, 1/16, 1/8, 1/4, 1] renormalized) so perceptual-style
+            # uses of the maps keep the baseline scale.
+            self.weights = np.array([1.0, 1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0])
+            self.weights = self.weights / np.sum(self.weights)
+            self.weights = self.weights[1:]
+            from models.networks.nce_diag import parse_int_list
+
+            return UNIFeatureExtractor(
+                opt=opt,
+                pretrained=True,
+                freeze_weights=opt.freeze_netF,
+                uni_input_size=getattr(opt, 'uni_input_size', None),
+                uni_ckpt_path=getattr(opt, 'uni_feature_ckpt', None),
+                grad_checkpoint=getattr(opt, 'uni_grad_checkpoint', True),
+                blocks=parse_int_list(
+                    getattr(opt, 'uni_blocks', None), default=(2, 5, 8, 11)
+                ),
             )
         elif opt.netF.lower() == 'pixel':
             return PixelEncoder(opt)

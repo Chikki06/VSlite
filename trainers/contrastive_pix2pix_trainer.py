@@ -90,7 +90,12 @@ class ContrastivePix2PixTrainer:
         return self.model(data, mode='features')
 
     def get_latest_losses(self):
-        return {**self.g_losses, **self.d_losses}
+        out = {**self.g_losses, **self.d_losses}
+        # NCE diag floats are stashed on the model so they never enter g_loss.backward().
+        diag = getattr(self.pix2pix_model_on_one_gpu, '_last_nce_diag', None)
+        if diag:
+            out.update(diag)
+        return out
 
     def get_latest_generated(self):
         return self.generated
